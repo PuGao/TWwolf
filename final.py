@@ -70,7 +70,7 @@ def callback():
         abort(400)
     return 'OK'
 #########################################################
-
+import random
 import json
 ################### 接收並處理文字訊息 ##################
 
@@ -193,7 +193,6 @@ def handle_message(event):
         ['https://news.ltn.com.tw/news/politics/breakingnews/3016660', 'https://news.ltn.com.tw/news/entertainment/breakingnews/3012386', 'https://news.ltn.com.tw/news/politics/breakingnews/3022617'], 
         ['https://news.ltn.com.tw/news/politics/paper/1335444', '0', 'https://news.ltn.com.tw/news/politics/breakingnews/3019446']
     ]
-  
     content = event.message.text
 
     # if content == '傳送':
@@ -472,275 +471,16 @@ def handle_message(event):
             )
             line_bot_api.leave_group(event.source.group_id)
     if content == '福利熊':
-        confirm_template = ConfirmTemplate(text='福利熊～熊福利～', actions=[
-            MessageAction(label='one two 福利', text='one two 福利'),
-            MessageAction(label='請支援收銀', text='請支援收銀'),
-        ])
-    ### 第一層 ####
-    if content == "熱搜":
-        buttons_template = TemplateSendMessage(
-            alt_text='新聞',
-            template=ButtonsTemplate(
-                title='選擇服務',
-                text='請選擇',
-                thumbnail_image_url='https://i.imgur.com/2VLgoMk.jpg',
+        confirm_template = ConfirmTemplate(
+                text='福利熊～熊福利～', 
                 actions=[
-                    MessageTemplateAction(
-                        label=today_keywords[0],
-                        text=today_keywords[0]
-                    ),
-                    MessageTemplateAction(
-                        label=today_keywords[1],
-                        text=today_keywords[1]
-                    ),
-                    MessageTemplateAction(
-                        label=today_keywords[2],
-                        text=today_keywords[2]
-                    ),
-                    MessageTemplateAction(
-                        label=today_keywords[3],
-                        text=today_keywords[3]
-                    )
-                ]
-            )
+                    MessageAction(label='one two 福利', text='one two 福利'),
+                    MessageAction(label='請支援收銀', text='請支援收銀'),
+            ]
         )
-        line_bot_api.reply_message(event.reply_token, buttons_template)
-        return 0
-    ####  第二層 ####
-    if content == today_keywords[0]:
-        line_bot_api.reply_message(
-            event.reply_token,[
-            ImageSendMessage(
-                original_content_url='https://i.imgur.com/tQikhCP.png',
-                preview_image_url='https://i.imgur.com/tQikhCP.png',
-            ),
-            TextSendMessage(
-                text='相關の關鍵字如下:',
-                quick_reply=QuickReply(
-                    items=[
-                        QuickReplyButton(
-                            action=MessageAction(label=today_keywords_choice[0][0], text=today_keywords_choice[0][0])
-                        ),
-                        QuickReplyButton(
-                            action=MessageAction(label=today_keywords_choice[0][1], text=today_keywords_choice[0][1])
-                        ),
-                        QuickReplyButton(
-                            action=MessageAction(label=today_keywords_choice[0][2], text=today_keywords_choice[0][2])
-                        ),
-                    ]
-                )
-            )
-        ])
-    ####  第三層 ####
-    if content == today_keywords_choice[0][0]:
-        line_bot_api.reply_message(
-            event.reply_token,[
-            TextSendMessage(
-                text="摘要:\n"+abstract[0][0]
-            ),
-            TextSendMessage(
-                text="聯合報udn:\n"+today_keywords_link_udn[0][0]+"\n自由時報ltn:\n"+today_keywords_link_ltn[0][0],
-                quick_reply=QuickReply(
-                    items=[
-                        QuickReplyButton(
-                            action=MessageAction(label='修但幾類', text='我比較想看c0')
-                        ),
-                        QuickReplyButton(
-                            action=MessageAction(label='哈哈哈～單身狗', text='汪')
-                        ),
-                        QuickReplyButton(
-                            action=MessageAction(label='讓我吸一張貓', text='喵')
-                        ),
-                    ]
-                )
-            )
-        ])
-    ####  第三層 ####
-    if content == today_keywords_choice[0][1]:
-        line_bot_api.reply_message(
-            event.reply_token,[
-            TextSendMessage(
-                text="摘要:\n"+abstract[0][1]
-            ),
-            TextSendMessage(
-                text="聯合報udn:\n"+today_keywords_link_udn[0][1]+"\n自由時報ltn:\n"+today_keywords_link_ltn[0][1],
-                quick_reply=QuickReply(
-                    items=[
-                        QuickReplyButton(
-                            action=MessageAction(label='修但幾類', text='我比較想看c0')
-                        ),
-                        QuickReplyButton(
-                            action=MessageAction(label='哈哈哈～單身狗', text='汪')
-                        ),
-                        QuickReplyButton(
-                            action=MessageAction(label='讓我吸一張貓', text='喵')
-                        ),
-                    ]
-                )
-            )            
-        ])
-    ####  第三層 ####
-    if content == today_keywords_choice[0][2]:
-        line_bot_api.reply_message(
-            event.reply_token,[
-            TextSendMessage(
-                text="摘要:\n"+abstract[0][2]
-            ),
-            TextSendMessage(
-                text="聯合報udn:\n"+today_keywords_link_udn[0][2]+"\n自由時報ltn:\n"+today_keywords_link_ltn[0][2],
-                quick_reply=QuickReply(
-                    items=[
-                        QuickReplyButton(
-                            action=MessageAction(label='修但幾類', text='我比較想看c0')
-                        ),
-                        QuickReplyButton(
-                            action=MessageAction(label='哈哈哈～單身狗', text='汪')
-                        ),
-                        QuickReplyButton(
-                            action=MessageAction(label='讓我吸一張貓', text='喵')
-                        ),
-                    ]
-                )
-            )
-        ])
-    
-    # ''''
-    # 洗牌
-    # ''''
-    # import random
-    # mapIndexPosition = list(zip(today_keywords, today_keywords_choice))
-    # random.shuffle(mapIndexPosition)
-    # today_keywords_shuffle, today_keywords_choice_shuffle= zip(*mapIndexPosition)
-
-    # if content =="下一組":
-    #     buttons_template = TemplateSendMessage(
-    #         alt_text='新聞',
-    #         template=ButtonsTemplate(
-    #             title='選擇服務',
-    #             text='請選擇',
-    #             thumbnail_image_url='https://i.imgur.com/qKkE2bj.jpg',
-    #             actions=[
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_shuffle[0],
-    #                     text=today_keywords_shuffle[0]
-    #                 ),
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_shuffle[1],
-    #                     text=today_keywords_shuffle[1]
-    #                 ),
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_shuffle[2],
-    #                     text=today_keywords_shuffle[2]
-    #                 ),
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_shuffle[3],
-    #                     text=today_keywords_shuffle[3]
-    #                 )
-    #             ]
-    #         )
-    #     )
-    #     line_bot_api.reply_message(event.reply_token, buttons_template)
-    #     return 0
-    # if content == today_keywords_shuffle[0]:
-    #     buttons_template = TemplateSendMessage(
-    #         alt_text='關鍵字',
-    #         template=ButtonsTemplate(
-    #             title='選擇服務',
-    #             text='請選擇',
-    #             thumbnail_image_url='https://i.imgur.com/qKkE2bj.jpg',
-    #             actions=[
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_choice_shuffle[0][0],
-    #                     text=today_keywords_choice_shuffle[0][0]
-    #                 ),
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_choice_shuffle[0][1],
-    #                     text=today_keywords_choice_shuffle[0][1]
-    #                 ),
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_choice_shuffle[0][2],
-    #                     text=today_keywords_choice_shuffle[0][2]
-    #                 )
-    #             ]
-    #         )
-    #     )
-    #     line_bot_api.reply_message(event.reply_token, buttons_template)
-    #     return 0
-    # if content == today_keywords_shuffle[1]:
-    #     buttons_template = TemplateSendMessage(
-    #         alt_text='關鍵字',
-    #         template=ButtonsTemplate(
-    #             title='選擇服務',
-    #             text='請選擇',
-    #             thumbnail_image_url='https://i.imgur.com/qKkE2bj.jpg',
-    #             actions=[
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_choice_shuffle[1][0],
-    #                     text=today_keywords_choice_shuffle[1][0]
-    #                 ),
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_choice_shuffle[1][1],
-    #                     text=today_keywords_choice_shuffle[1][1]
-    #                 ),
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_choice_shuffle[1][2],
-    #                     text=today_keywords_choice_shuffle[1][2]
-    #                 )
-    #             ]
-    #         )
-    #     )
-    #     line_bot_api.reply_message(event.reply_token, buttons_template)
-    #     return 0
-    # if content == today_keywords_shuffle[2]:
-    #     buttons_template = TemplateSendMessage(
-    #         alt_text='關鍵字',
-    #         template=ButtonsTemplate(
-    #             title='選擇服務',
-    #             text='請選擇',
-    #             thumbnail_image_url='https://i.imgur.com/qKkE2bj.jpg',
-    #             actions=[
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_choice_shuffle[2][0],
-    #                     text=today_keywords_choice_shuffle[2][0]
-    #                 ),
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_choice_shuffle[2][1],
-    #                     text=today_keywords_choice_shuffle[2][1]
-    #                 ),
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_choice_shuffle[2][2],
-    #                     text=today_keywords_choice_shuffle[2][2]
-    #                 )
-    #             ]
-    #         )
-    #     )
-    #     line_bot_api.reply_message(event.reply_token, buttons_template)
-    #     return 0
-    # if content == today_keywords_shuffle[3]:
-    #     buttons_template = TemplateSendMessage(
-    #         alt_text='關鍵字',
-    #         template=ButtonsTemplate(
-    #             title='選擇服務',
-    #             text='請選擇',
-    #             thumbnail_image_url='https://i.imgur.com/qKkE2bj.jpg',
-    #             actions=[
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_choice_shuffle[3][0],
-    #                     text=today_keywords_choice_shuffle[3][0]
-    #                 ),
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_choice_shuffle[3][1],
-    #                     text=today_keywords_choice_shuffle[3][1]
-    #                 ),
-    #                 MessageTemplateAction(
-    #                     label=today_keywords_choice_shuffle[3][2],
-    #                     text=today_keywords_choice_shuffle[3][2]
-    #                 )
-    #             ]
-    #         )
-    #     )
-    #     line_bot_api.reply_message(event.reply_token, buttons_template)
-    #     return 0
+        template_message = TemplateSendMessage(
+            alt_text='Confirm alt text', template=confirm_template)
+        line_bot_api.reply_message(event.reply_token, template_message)
     if content == '我比較想看c0':
         profile = line_bot_api.get_profile(event.source.user_id)
         line_bot_api.reply_message(
@@ -793,9 +533,299 @@ def handle_message(event):
                 preview_image_url=dog_url,
             ),
         )
+    # if content == 'buttons':
+    #     buttons_template = ButtonsTemplate(
+    #         title='My buttons sample', text='Hello, my buttons', actions=[
+    #             URIAction(label='Go to line.me', uri='https://line.me'),
+    #             PostbackAction(label='ping', data='ping'),
+    #             PostbackAction(label='ping with text', data='ping', text='ping'),
+    #             MessageAction(label='Translate Rice', text='米')
+    #         ])
+    #     template_message = TemplateSendMessage(
+    #         alt_text='Buttons alt text', template=buttons_template)
+    #     line_bot_api.reply_message(event.reply_token, template_message)
+    ### 第一層-random ####
+    if content == "熱搜":
+        global total
+        total=list(zip(today_keywords, today_keywords_choice, abstract, today_keywords_link_udn, today_keywords_link_ltn))
+        random.shuffle(total)
+        buttons_template = TemplateSendMessage(
+            alt_text='新聞',
+            template=ButtonsTemplate(
+                title='選擇服務',
+                text='請選擇',
+                thumbnail_image_url='https://i.imgur.com/2VLgoMk.jpg',
+                actions=[
+                    MessageTemplateAction(
+                        label=total[0][0],
+                        text=total[0][0]
+                    ),
+                    MessageTemplateAction(
+                        label=total[1][0],
+                        text=total[1][0]
+                    ),
+                    MessageTemplateAction(
+                        label=total[2][0],
+                        text=total[2][0]
+                    ),
+                    MessageTemplateAction(
+                        label=total[3][0],
+                        text=total[3][0]
+                    )
+                ]
+            )
+        )
+        line_bot_api.reply_message(event.reply_token, buttons_template)
+        
+        ####  第二層total-0 ####
+    if content == total[0][0]:
+        # random.seed(3)
+        line_bot_api.reply_message(
+            event.reply_token,[
+            ImageSendMessage(
+                original_content_url='https://i.imgur.com/tQikhCP.png',
+                preview_image_url='https://i.imgur.com/tQikhCP.png',
+            ),
+            TextSendMessage(
+                text='相關の關鍵字如下:',
+                quick_reply=QuickReply(
+                    items=[
+                        QuickReplyButton(
+                            action=MessageAction(label=total[0][1][0], text=total[0][1][0])
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label=total[0][1][1], text=total[0][1][1])
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label=total[0][1][2], text=total[0][1][2])
+                        ),
+                    ]
+                )
+            )
+        ])
+        ####  第三層total-0 ####
+    if content == total[0][1][0]:
+        line_bot_api.reply_message(
+            event.reply_token,[
+            TextSendMessage(
+                text="摘要:\n"+total[0][2][0]
+            ),
+            TextSendMessage(
+                text="聯合報udn:\n"+total[0][3][0]+"\n自由時報ltn:\n"+total[0][4][0],
+                quick_reply=QuickReply(
+                    items=[
+                        QuickReplyButton(
+                            action=MessageAction(label='修但幾類', text='我比較想看c0')
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label='哈哈哈～單身狗', text='汪')
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label='讓我吸一張貓', text='喵')
+                        ),
+                    ]
+                )
+            )
+        ])
+        ####  第三層total-1 ####
+    if content == total[0][1][1]:
+        line_bot_api.reply_message(
+            event.reply_token,[
+            TextSendMessage(
+                text="摘要:\n"+total[0][2][1]
+            ),
+            TextSendMessage(
+                text="聯合報udn:\n"+total[0][3][1]+"\n自由時報ltn:\n"+total[0][4][1],
+                quick_reply=QuickReply(
+                    items=[
+                        QuickReplyButton(
+                            action=MessageAction(label='修但幾類', text='我比較想看c0')
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label='哈哈哈～單身狗', text='汪')
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label='讓我吸一張貓', text='喵')
+                        ),
+                    ]
+                )
+            )            
+        ])
+        ####  第三層total-2 ####
+    if content == total[0][1][2]:
+        line_bot_api.reply_message(
+            event.reply_token,[
+            TextSendMessage(
+                text="摘要:\n"+total[0][2][2]
+            ),
+            TextSendMessage(
+                text="聯合報udn:\n"+total[0][3][2]+"\n自由時報ltn:\n"+total[0][4][2],
+                quick_reply=QuickReply(
+                    items=[
+                        QuickReplyButton(
+                            action=MessageAction(label='修但幾類', text='我比較想看c0')
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label='哈哈哈～單身狗', text='汪')
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label='讓我吸一張貓', text='喵')
+                        ),
+                    ]
+                )
+            )
+        ])
+        #### 如果不喜歡-random ####
+    if content =="下一組":
+        global total_2
+        total_2=list(zip(today_keywords, today_keywords_choice, abstract, today_keywords_link_udn, today_keywords_link_ltn))
+        random.shuffle(total_2)
+        buttons_template = TemplateSendMessage(
+            alt_text='新聞',
+            template=ButtonsTemplate(
+                title='選擇服務',
+                text='請選擇',
+                thumbnail_image_url='https://i.imgur.com/qKkE2bj.jpg',
+                actions=[
+                    MessageTemplateAction(
+                        label=total_2[0][0],
+                        text=total_2[0][0]
+                    ),
+                    MessageTemplateAction(
+                        label=total_2[1][0],
+                        text=total_2[1][0]
+                    ),
+                    MessageTemplateAction(
+                        label=total_2[2][0],
+                        text=total_2[2][0]
+                    ),
+                    MessageTemplateAction(
+                        label=total_2[3][0],
+                        text=total_2[3][0]
+                    )
+                ]
+            )
+        )
+        line_bot_api.reply_message(event.reply_token, buttons_template)
+        ####  第二層total_2-0 ####
+    if content == total_2[0][0]:
+        # random.seed(3)
+        line_bot_api.reply_message(
+            event.reply_token,[
+            ImageSendMessage(
+                original_content_url='https://i.imgur.com/tQikhCP.png',
+                preview_image_url='https://i.imgur.com/tQikhCP.png',
+            ),
+            TextSendMessage(
+                text='相關の關鍵字如下:',
+                quick_reply=QuickReply(
+                    items=[
+                        QuickReplyButton(
+                            action=MessageAction(label=total_2[0][1][0], text=total_2[0][1][0])
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label=total_2[0][1][1], text=total_2[0][1][1])
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label=total_2[0][1][2], text=total_2[0][1][2])
+                        ),
+                    ]
+                )
+            )
+        ])
+        ####  第三層total_2-0 ####
+    if content == total_2[0][1][0]:
+        line_bot_api.reply_message(
+            event.reply_token,[
+            TextSendMessage(
+                text="摘要:\n"+total_2[0][2][0]
+            ),
+            TextSendMessage(
+                text="聯合報udn:\n"+total_2[0][3][0]+"\n自由時報ltn:\n"+total_2[0][4][0],
+                quick_reply=QuickReply(
+                    items=[
+                        QuickReplyButton(
+                            action=MessageAction(label='修但幾類', text='我比較想看c0')
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label='哈哈哈～單身狗', text='汪')
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label='讓我吸一張貓', text='喵')
+                        ),
+                    ]
+                )
+            )
+        ])
+        ####  第三層total_2-1 ####
+    if content == total_2[0][1][1]:
+        line_bot_api.reply_message(
+            event.reply_token,[
+            TextSendMessage(
+                text="摘要:\n"+total_2[0][2][1]
+            ),
+            TextSendMessage(
+                text="聯合報udn:\n"+total_2[0][3][1]+"\n自由時報ltn:\n"+total_2[0][4][1],
+                quick_reply=QuickReply(
+                    items=[
+                        QuickReplyButton(
+                            action=MessageAction(label='修但幾類', text='我比較想看c0')
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label='哈哈哈～單身狗', text='汪')
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label='讓我吸一張貓', text='喵')
+                        ),
+                    ]
+                )
+            )            
+        ])
+        ####  第三層total_2-2 ####
+    if content == total_2[0][1][2]:
+        line_bot_api.reply_message(
+            event.reply_token,[
+            TextSendMessage(
+                text="摘要:\n"+total_2[0][2][2]
+            ),
+            TextSendMessage(
+                text="聯合報udn:\n"+total_2[0][3][2]+"\n自由時報ltn:\n"+total_2[0][4][2],
+                quick_reply=QuickReply(
+                    items=[
+                        QuickReplyButton(
+                            action=MessageAction(label='修但幾類', text='我比較想看c0')
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label='哈哈哈～單身狗', text='汪')
+                        ),
+                        QuickReplyButton(
+                            action=MessageAction(label='讓我吸一張貓', text='喵')
+                        ),
+                    ]
+                )
+            )
+        ])
     else:
-        line_bot_api.reply_message(event.reply_token, TextSendMessage(text='說點有意義的話好嗎'))
+        line_bot_api.reply_message(event.reply_token, TextSendMessage(text='🙂🙃'+'說點有意義的話好嗎'+'🙃🙂'))
 
+@handler.add(MessageEvent, message=StickerMessage)
+def handle_sticker_message(event):
+    print("package_id:", event.message.package_id)
+    print("sticker_id:", event.message.sticker_id)
+    # ref. https://developers.line.me/media/messaging-api/sticker_list.pdf
+    sticker_ids = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 21, 100, 101, 102, 103, 104, 105, 106,
+                   107, 108, 109, 110, 111, 112, 113, 114, 115, 116, 117, 118, 119, 120, 121, 122, 123, 124, 125,
+                   126, 127, 128, 129, 130, 131, 132, 133, 134, 135, 136, 137, 138, 139, 401, 402]
+    index_id = random.randint(0, len(sticker_ids) - 1)
+    sticker_id = str(sticker_ids[index_id])
+    print(index_id)
+    sticker_message = StickerSendMessage(
+        package_id='1',
+        sticker_id=sticker_id
+    )
+    line_bot_api.reply_message(
+        event.reply_token,
+        sticker_message)
 
 ####################### 執行 Flask ######################
 if __name__ == "__main__":
