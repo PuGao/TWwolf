@@ -44,6 +44,11 @@ handler = WebhookHandler(os.getenv('LINE_BOT_SECRET'))
 #########################################################
 
 
+import sys
+import datetime
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials as SAC
+
 
 ###################### 初始化 Flask #####################
 from flask import Flask, request, abort
