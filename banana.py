@@ -168,6 +168,8 @@ print(temp.find('a').get('href'))
 import requests
 import codecs
 from textrank4zh import TextRank4Keyword, TextRank4Sentence
+from snownlp import SnowNLP
+from pyhanlp import *
 #jieba.set_dictionary(r'C:\Users\ASUS\Desktop\dict.txt.big.txt')
 ubn_article=""
 ltn_article=""
@@ -214,28 +216,48 @@ words=jieba.posseg.lcut(china_article)
     #print(word)
 #print(jieba.analyse.extract_tags(china_article,topK=20, withWeight=False, allowPOS=('x')))
 
+
+
 #這邊開始做摘要
+### HanLp ###
+# print(HanLP.extractSummary(ubn_article+ltn_article, 8))
 
-#text = ubn_article+ltn_article+china_article
-text = ubn_article+ltn_article#還沒抓中時 先測聯合跟自由
-tr4w = TextRank4Keyword()
+### SnowNLP ###
+# s1 = SnowNLP(ubn_article)
+# abstract_1=s1.summary(10)
+# print(abstract_1)
+# print("---------")
+# s2 = SnowNLP(ltn_article)
+# abstract_2=s2.summary(10)
+# print(abstract_2)
+# print("---------")
 
-tr4w.analyze(text=text, lower=True, window=2)  # py2中text必须是utf8编码的str或者unicode对象，py3中必须是utf8编码的bytes或者str对象
+# str1_abstract=",".join(abstract_1)
+# str2_abstract=",".join(abstract_2)
+# text = str1_abstract+"。"+str2_abstract+"。"
+# s_total=SnowNLP(text)
+# abstract_final=s_total.summary(4)
+# print(abstract_final)
 
-#print( '关键词：' )
-#for item in tr4w.get_keywords(20, word_min_len=1):
-#    print(item.word, item.weight)
+### textrank4zh ###
+text = ubn_article+ltn_article+china_article
+# tr4w = TextRank4Keyword()
+# tr4w.analyze(text=text, lower=True, window=2)  # py2中text必须是utf8编码的str或者unicode对象，py3中必须是utf8编码的bytes或者str对象
 
-#print()
-#print( '关键短语：' )
-#for phrase in tr4w.get_keyphrases(keywords_num=20, min_occur_num= 2):
-#    print(phrase)
+# #print( '关键词：' )
+# #for item in tr4w.get_keywords(20, word_min_len=1):
+# #    print(item.word, item.weight)
+
+# #print()
+# #print( '关键短语：' )
+# #for phrase in tr4w.get_keyphrases(keywords_num=20, min_occur_num= 2):
+# #    print(phrase)
 
 tr4s = TextRank4Sentence()
 tr4s.analyze(text=text, lower=True, source = 'all_filters')
 
-print()
-print( '摘要：' )
+# print()
+# print( '摘要：' )
 for item in tr4s.get_key_sentences(num=3):
     #print(item.index, item.weight, item.sentence)  # index是语句在文本中位置，weight是权重
     print(item.sentence)

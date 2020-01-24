@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 
 today_keywords=[
     "貿易戰",
@@ -66,6 +68,100 @@ today_keywords_link_ltn=[
     ['https://news.ltn.com.tw/news/opinion/paper/1341854', 'https://news.ltn.com.tw/news/business/breakingnews/3020692', 'https://news.ltn.com.tw/news/politics/breakingnews/2992744'], 
 ]    
 
+
+
+
+# from __future__ import absolute_import
+# from __future__ import division, print_function, unicode_literals
+
+# from sumy.parsers.html import HtmlParser
+from sumy.parsers.plaintext import PlaintextParser
+from sumy.nlp.tokenizers import Tokenizer
+from sumy.summarizers.lsa import LsaSummarizer as Summarizer
+from sumy.summarizers.luhn import LuhnSummarizer
+import requests
+from selenium import webdriver
+# from selenium.webdriver.support.ui import WebDriverWait
+# from selenium.webdriver.support import expected_conditions as EC
+# from selenium.webdriver.common.by import By
+# from selenium.common.exceptions import *
+from selenium.webdriver.common.keys import Keys
+
+from bs4 import BeautifulSoup
+import jieba,os,jieba.analyse,requests,time
+import jieba.posseg as pseg
+# import codecs
+# from textrank4zh import TextRank4Keyword, TextRank4Sentence
+# from snownlp import SnowNLP
+# from pyhanlp import *
+#jieba.set_dictionary(r'C:\Users\ASUS\Desktop\dict.txt.big.txt')
+ubn_article=""
+ltn_article=""
+china_article=""
+ubn_url = requests.get('https://udn.com/news/story/12639/4212729')
+ltn_url = requests.get('https://news.ltn.com.tw/news/business/breakingnews/3002205')
+#china_url=requests.get('https://www.chinatimes.com/newspapers/20191128000208-260301?chdtv')
+ubn_soup = BeautifulSoup(ubn_url.text, 'html.parser')
+ltn_soup = BeautifulSoup(ltn_url.text, 'html.parser')
+#china_soup= BeautifulSoup(china_url.text, 'html.parser')
+#先處理ubn
+for temp in ubn_soup.find_all('p'):
+    #print(temp.text)
+    ubn_article+=temp.text
+print("UBN：")
+print(ubn_article)
+words=jieba.posseg.lcut(ubn_article)
+#for word in words:
+    #print(word)
+#print(jieba.analyse.extract_tags(ubn_article,topK=20, withWeight=False, allowPOS=('x')))
+
+#先處理ltn
+for temp in ltn_soup.find_all('p'):
+    #print(temp.text)
+    ltn_article+=temp.text
+print("LTN：")
+print(ltn_article)
+words=jieba.posseg.lcut(ltn_article)
+# from sumy.nlp.stemmers import Stemmer
+# from sumy.utils import get_stop_words
+
+# url = "https://en.wikipedia.org/wiki/Automatic_summarization"
+# parser = HtmlParser.from_url(url, Tokenizer(LANGUAGE))
+# or for plain text files
+# parser = PlaintextParser.from_file("document.txt", Tokenizer(LANGUAGE))
+#article=ubn_article+ltn_article
+article="《英國廣播公司》（BBC）15日刊出蔡英文專訪，她表示，中國若侵略台灣將付出很大的代價。這段訪問引發國際間注目，甚至登上美國知名社群媒體「Reddit」的熱門話題，有美國網友諷刺地留言說「台灣大陸（Mainland Taiwan）看到應該不太開心」。蔡總統告訴《BBC》：「任何時候都無法排除戰爭的可能性，問題是必須做好準備，並且強化自我防衛的能力，但除此之外更重要的是，你需要得到國際社會的支持，所以我們採取了不挑釁的態度，因為我們不想挑釁對岸，讓情勢更糟，或給對岸藉口為所欲為。」被問及台灣是否能夠抵抗軍事行動，蔡總統強調，台灣的軍事能力相當不錯，「對中國來說，侵略台灣的代價將非常巨大」。"
+parser = PlaintextParser.from_string(article, Tokenizer("chinese"))
+# stemmer = Stemmer(LANGUAGE)
+
+summarizer = LuhnSummarizer()
+# summarizer.stop_words = get_stop_words(LANGUAGE)
+print("----摘要結果Luhn----\n")
+for sentence in summarizer(parser.document, 2):
+    print(sentence)
+
+from sumy.summarizers.lex_rank import LexRankSummarizer 
+summarizer_1 = LexRankSummarizer()
+print("----摘要結果Lexrank----\n")
+for sentence_1 in summarizer_1(parser.document, 2):
+    print(sentence_1)
+
+from sumy.summarizers.lsa import LsaSummarizer
+summarizer_2 = LsaSummarizer()
+print("----摘要結果Lsa----\n")
+article=""
+for sentence_2 in summarizer_2(parser.document, 2):
+    # print(type(sentence_2))
+    article+=str(sentence_2)
+    print(sentence_2)
+#print ("List in proper method:", '[%s]' % ''.join(map(str, article))) 
+
+
+from sumy.summarizers.text_rank import TextRankSummarizer
+summarizer_3 = TextRankSummarizer()
+print("----摘要結果TextRank----\n")
+for sentence_3 in summarizer_3(parser.document, 2):
+    print(sentence_3)
 # for x, y, z, w in zip(today_keywords, today_keywords_choice, today_keywords_link_ubn, today_keywords_link_ltn):
 #   print(x, y, z, w)
 
@@ -242,3 +338,15 @@ print(total[0][0],total[0][1][0])
 # # random.shuffle(numbers)
 # # print("reshuffled list ", numbers)
 '''
+
+# import string
+# import re
+# demo = " Demo  Example  "
+# demo = re.sub(r"\s+","", demo)
+# # demo=demo.translate({ord(demo): None for demo in string.whitespace})
+# # demo.replace(" ","")
+# print(demo)
+
+
+
+    

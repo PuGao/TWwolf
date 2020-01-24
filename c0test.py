@@ -171,11 +171,14 @@ def second_part(user_input,msg_choose):
     soup_final = BeautifulSoup(url_final.text, 'html.parser')
     temp_final=soup_final.find('a', class_='tit')
     title.append(temp_final.text)
-    temp_ltn_link=temp_final.get('href')
-    print("自由時報ltn:")
-    print(temp_final.text+":"+temp_ltn_link)
+    title.append(temp_final.get('href'))
+    #temp_ltn_link=temp_final.get('href')
+    #print("自由時報ltn:")
+    #print(temp_final.text+":"+temp_ltn_link)
+    print(title)
     browser.quit()
-    return temp_ltn_link
+    return title
+    #return temp_ltn_link
 
 def third_part(user_input,msg_choose):
     #處理完自由時報並取得關鍵字後進入聯合報搜尋
@@ -291,7 +294,10 @@ def fourth_part(udn_link, ltn_link):
     print(abstract)
     return abstract
 
-
+def fifth_part(content):
+    jieba.set_dictionary('/Users/apple/Desktop/dict.txt.big.txt')
+    jieba.set_dictionary('/Users/apple/Desktop/dict.txt.small.txt')
+    print(jieba.analyse.textrank(content, topK=20, withWeight=False, allowPOS=('ns','n','nt','nz','nr')))
 # @handler.add(MessageEvent, message=TextMessage)
 # def printit(event1):
 #     import threading
@@ -303,23 +309,20 @@ def fourth_part(udn_link, ltn_link):
 # 處理訊息
 @handler.add(MessageEvent, message=TextMessage)
 def handle_msg_message(event):
-    if event.reply_token == "00000000000000000000000000000000":
-        return
+
     import re
     content=event.message.text
-    # tStart=time.time()
-    # if time.time()-tStart > 10:
-    #     line_bot_api.push_message(
-    #         event.source.user_id, [
-    #                 TextSendMessage(text=profile.display_name+"啾都媽爹幾類")
-    #         ]
-    #     )
+    
     if content[0:2] == "熱搜":#觸發條件
         tStart = time.time()
         global user_input
         user_input=content[2:10] #剩餘關鍵字,ex:熱搜 韓國瑜
         user_input=re.sub(r"\s+","", user_input)#去除[2:10]之空白格
-        global msg
+        global msg #第一部分輸出的list
+        global msg_flag
+        global totallink
+        totallink =[]
+        msg_flag=[0,0,0]#初始情況是都沒有被點過
         msg=list(first_part(user_input))
         tEnd = time.time()
         delta_t=str(round(tEnd-tStart, 2))
@@ -350,35 +353,139 @@ def handle_msg_message(event):
     if content == msg[0]:
         tStart = time.time()
         msg_choose=msg[0]
-        ltn_link=second_part(user_input,msg_choose) #ltn_link
-        udn_link=third_part(user_input,msg_choose) #udn_link
-        #abstract=fourth_part(ltn_link,udn_link) #abstract
+
+        msg_flag[0]=1
+
         tEnd = time.time()
         delta_t=str(round(tEnd-tStart, 2))
-        print('time elapsed: ' + delta_t + ' seconds')
-
+        T=second_part(user_input,msg_choose)
+        totallink.append(T[1]) #ltn_link
+        #udn_link=third_part(user_input,msg_choose) #udn_link
+        #abstract=fourth_part(ltn_link,udn_link) #abstract
+        print(totallink[0])
         line_bot_api.reply_message(
-            event.reply_token,
-            TextSendMessage(text="聯合報udn:\n"+udn_link+"\n自由時報ltn:\n"+ltn_link))
+                event.reply_token,
+                TextSendMessage(
+                    text='是不是在想我怎麼消失惹',
+                    quick_reply=QuickReply(
+                        items=[
+                            QuickReplyButton(
+                                action=MessageAction(label="快結束惹 點我集氣一下", text="快結束惹 點我集氣一下")
+                            ),
+                        ]
+                    )
+                )
+            ) 
 
-    ####  第二層total-1 ####
+        
+        print('===========================here costing: ' + delta_t + ' seconds=====================')
+
     if content == msg[1]:
         tStart = time.time()
         msg_choose=msg[1]
-        ltn_link=second_part(user_input,msg_choose) #ltn_link
-        udn_link=third_part(user_input,msg_choose) #udn_link
-        #abstract=fourth_part(ltn_link,udn_link) #abstract
+
+        msg_flag[1]=1
+
         tEnd = time.time()
         delta_t=str(round(tEnd-tStart, 2))
-        print('time elapsed: ' + delta_t + ' seconds')
-
+        T=second_part(user_input,msg_choose)
+        totallink.append(T[1])  #ltn_link
+        #udn_link=third_part(user_input,msg_choose) #udn_link
+        #abstract=fourth_part(ltn_link,udn_link) #abstract
+        print(totallink[0])
         line_bot_api.reply_message(
-            event.reply_token,[
-            TextSendMessage(
-                #text="摘要:\n"+abstract
-                text="87878"
-            )
-        ])
+                event.reply_token,
+                TextSendMessage(
+                    text='是不是在想我怎麼消失惹',
+                    quick_reply=QuickReply(
+                        items=[
+                            QuickReplyButton(
+                                action=MessageAction(label="快結束惹 點我集氣一下", text="快結束惹 點我集氣一下")
+                            ),
+                        ]
+                    )
+                )
+            ) 
+
+        
+        print('===========================here costing: ' + delta_t + ' seconds=====================')
+
+    if content == msg[2]:
+        tStart = time.time()
+        msg_choose=msg[2]
+
+        msg_flag[2]=1
+
+        tEnd = time.time()
+        delta_t=str(round(tEnd-tStart, 2))
+        T=second_part(user_input,msg_choose)
+        totallink.append(T[1]) #ltn_link
+        #udn_link=third_part(user_input,msg_choose) #udn_link
+        #abstract=fourth_part(ltn_link,udn_link) #abstract
+        print(totallink[0])
+        line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(
+                    text='是不是在想我怎麼消失惹',
+                    quick_reply=QuickReply(
+                        items=[
+                            QuickReplyButton(
+                                action=MessageAction(label="快結束惹 點我集氣一下", text="快結束惹 點我集氣一下")
+                            ),
+                        ]
+                    )
+                )
+            ) 
+
+        
+        print('===========================here costing: ' + delta_t + ' seconds=====================')
+
+    if content=="快結束惹 點我集氣一下":
+        if msg_flag[0]==1:
+            msg_choose=msg[0]
+        if msg_flag[1]==1:
+            msg_choose=msg[1]
+        if msg_flag[2]==1:
+            msg_choose=msg[2]
+        totallink.append(third_part(user_input,msg_choose)) #udn_link
+        line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="聯合報udn:\n"+totallink[0]+"\n自由時報ltn:\n"+totallink[1]))
+    if content=="說重點":
+        fifth_part(fourth_part(totallink[0],totallink[1])
+    # if (content == "還有嗎" and msg_flag[0]==1) or (content == "還有嗎" and msg_flag[1]==1) or (content == "還有嗎" and msg_flag[2]==1):
+    #     tStart = time.time()
+'''
+        if msg_flag[0]==1:
+            msg_choose=msg[0]
+            totallink.append(third_part(user_input,msg_choose)) #udn_link
+        if msg_flag[1]==1:
+            msg_choose=msg[1]
+            totallink.append(third_part(user_input,msg_choose)) #udn_link
+        if msg_flag[2]==1:
+            msg_choose=msg[2]
+            totallink.append(third_part(user_input,msg_choose)) #udn_link
+
+        
+        line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text="聯合報udn:\n"+totallink[1]))
+        tEnd = time.time()
+        delta_t=str(round(tEnd-tStart, 2))
+        print('=============================here costing: ' + delta_t + ' seconds====================')
+'''
+    if content == "摘要":
+        tStart = time.time()
+        msg_choose=msg[0]
+        abstract=fourth_part(totallink[0],totallink[1]) #abstract
+        line_bot_api.reply_message(
+        event.reply_token,
+        TextSendMessage(text="摘要:\n"+abstract))
+        tEnd = time.time()
+        delta_t=str(round(tEnd-tStart, 2))
+        print('=============================here costing: ' + delta_t + ' seconds====================')
+
+    
     else:
         line_bot_api.reply_message(event.reply_token, TextSendMessage(text='🙂🙃'+'說點有意義的話好嗎'+'🙃🙂'))
 
