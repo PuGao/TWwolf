@@ -1,0 +1,901 @@
+# -*- coding: utf-8 -*-
+
+#### 1/14 TWwolf 報告最終版 ####
+import os
+import dotenv
+dotenv.load_dotenv()
+
+from linebot import (
+    LineBotApi, WebhookHandler
+)
+from linebot.exceptions import (
+    LineBotApiError, InvalidSignatureError
+)
+from linebot.models import(
+    MessageEvent, TextMessage, TextSendMessage, ImageSendMessage, QuickReply, QuickReplyButton, MessageAction ,TemplateSendMessage,
+    ButtonsTemplate ,MessageTemplateAction
+)
+
+##### web crawler #####
+from selenium import webdriver
+# from selenium.webdriver.support.ui import WebDriverWait
+# from selenium.webdriver.support import expected_conditions as EC
+# from selenium.webdriver.common.by import By
+# from selenium.common.exceptions import *
+from selenium.webdriver.common.keys import Keys
+from bs4 import BeautifulSoup
+##### web crawler #####
+
+##### Keyword and abstract #####
+import jieba
+import jieba.analyse
+import requests
+import time
+import jieba.posseg as pseg
+
+### 需更改路徑，txt檔在 ForTest 裡 ###
+# jieba.set_dictionary('/Users/apple/Desktop/dict.big.txt')
+# jieba.set_dictionary('/Users/apple/Desktop/dict.small.txt')
+### 需更改路徑，txt檔在 ForTest 裡 ###
+
+import codecs
+from textrank4zh import TextRank4Keyword, TextRank4Sentence
+from snownlp import SnowNLP
+from sumy.parsers.plaintext import PlaintextParser
+from sumy.nlp.tokenizers import Tokenizer
+from sumy.summarizers.lsa import LsaSummarizer
+from sumy.summarizers.luhn import LuhnSummarizer
+# from gensim import corpora,models,similarities
+##### Keyword and abstract #####
+
+##### google API #####
+import sys
+import datetime
+import gspread
+import json
+from oauth2client.service_account import ServiceAccountCredentials as SAC
+##### google API #####
+
+
+line_bot_api = LineBotApi(os.getenv('LINE_BOT_ACCESS_TOKEN'))
+handler = WebhookHandler(os.getenv('LINE_BOT_SECRET'))
+
+###################### 初始化 Flask #####################
+from flask import Flask, request, abort
+
+app = Flask(__name__)
+############### 初始化 Callback Endpoint ################
+@app.route("/", methods=['POST'])
+def callback():
+    # if request.method == "POST":
+    #     update = .Update.de_json(request.get_json(force=True), bot)
+    #     dispatcher.process_update(update)
+    # return 'ok'
+
+    # 這一段可以不需要理解，這是 Line 官方在 Line Bot Python SDK 使用說明裡
+    # 提供的程式碼：https://github.com/line/line-bot-sdk-python
+
+    signature = request.headers['X-Line-Signature']
+    body = request.get_data(as_text=True)
+    app.logger.info("Request body: " + body)
+
+    # print(body)
+
+    try:
+        handler.handle(body, signature)
+     
+    except InvalidSignatureError:
+        abort(400)
+    return 'OK'
+#########################################################
+def first_part(user_input):
+    #第一步先進去搜尋結果的頁面抓出兩頁的所有標題跟連結
+    title=[]
+    title_keyword=[]
+
+    browser = webdriver.Chrome(executable_path='/opt/anaconda3/envs/flask/bin/chromedriver')
+    browser.get("https://www.ltn.com.tw/")
+    search_btn = browser.find_element_by_css_selector("a[class*='iconSearch']").click()
+    time.sleep(1)
+    keyword = browser.find_element_by_css_selector("div[class='ltnsch_show boxTitle boxText'] input[id='cacheSearch']")
+    # keyword = browser.find_element_by_id("qs")
+    keyword.send_keys(user_input)
+    keyword.send_keys(Keys.RETURN)
+    print(browser.current_url)#這個列出來的是搜尋結果的網址
+    url = requests.get(browser.current_url)
+    time.sleep(1)
+    nextpage_btn=browser.find_element_by_class_name("p_next")
+    nextpage_btn.click()
+    time.sleep(1)
+    print(browser.current_url)#第二頁搜尋結果的網址
+    url2=requests.get(browser.current_url)
+    browser.close()
+    
+    onlyme.append(url)
+
+
+    #解析網站抓出標題
+    soup = BeautifulSoup(url.text, 'html.parser')
+    soup2 = BeautifulSoup(url2.text, 'html.parser')
+    #print("網站內容")
+    #print(soup.prettify())
+    tt=soup.find('a', class_='tit')
+    for temp in soup.find_all('a', class_='tit'):
+        try:
+            #print(temp.text.split("〉")[1])
+            t1=temp.text.split("〉")[1]
+            title.append(t1)
+        except:
+            title.append(temp.text)
+            
+        #temp_url=temp.get('href')
+        #print(temp.text+"："+temp_url)
+    for temp in soup2.find_all('a', class_='tit'):
+        try:
+            #print(temp.text.split("〉")[1])
+            t1=temp.text.split("〉")[1]
+            title.append(t1)
+        except:
+            title.append(temp.text)
+    OP=[]#我想不到更好的寫法惹先這樣 我不懂為什麼原本一大堆try except的哪有有問題
+    for i in range(0,len(title)):
+        try:
+            t2=title[i].split("》")[1]
+            OP.append(t2)
+        except:
+            OP.append(title[i])
+    title=OP
+    for yoyo in title:
+        print(len(yoyo))
+        if (len(yoyo))<6:
+            title.remove(yoyo)
+    print(title)
+
+    #這邊開始分析標題，將每個標題都抓出一個關鍵字
+    total=[]
+    for elements in title:
+        words = jieba.cut(elements, cut_all=False)
+        title_keyword.append(jieba.analyse.extract_tags(elements,topK=1, withWeight=False)[0])
+ 
+        
+    new_key_list = list(set(title_keyword))#利用集合刪掉重複的關鍵字
+
+    #下面是因為結巴的語法問題，所以要將剛剛找出的所有關鍵字重組成一個字串
+    new_key=""
+    for element in new_key_list:
+        new_key+=element
+        new_key+="，"
+    words =pseg.cut(new_key)#然做同樣的事，先切割字串
+
+    print("關鍵字：")#再抓出關鍵字
+    origin=jieba.analyse.extract_tags(new_key,topK=20, withWeight=False, allowPOS=('nz','ng','nr','nrfg','nrt','ns','nt'))    
+    finallist=jieba.analyse.extract_tags(new_key,topK=20, withWeight=False)
+    try:
+        origin.remove(user_input)
+    except:
+        print("無重複字在origin")
+    try:
+        finallist.remove(user_input)
+    except:
+        print("無重複字在finallist")
+    ttmp=[]
+    try:
+        print("原本的：")
+        for i in range(3,6):#選第3到5個是經驗法則，通常前面的東西都有點奇怪
+            print(origin[i])#印出三組供使用者選的關鍵字
+            ttmp=origin
+    except:
+        ttmp.clear()
+        print("抓不滿的情況：")
+        for i in range(0,len(origin)):
+            finallist.append(origin[i])
+        print(finallist)
+        for i in range(3,6):#選第3到5個是經驗法則，通常前面的東西都有點奇怪
+            print(finallist[i])#印出三組供使用者選的關鍵字
+            ttmp.append(finallist[i])
+        mid=int((len(finallist))/2)
+        print(finallist[mid-1],finallist[mid],finallist[mid+1])
+        # ttmp.append(finallist[1])
+        # ttmp.append(finallist[-1])
+        # ttmp.append(finallist[-2])
+
+    ttmp.append(tt.get('href'))
+    return ttmp
+#########################################################
+def second_part(user_input,msg_choose):
+    #這邊隨便抓一個關鍵字做測試 之後是根據使用者選的 加上使用者一開始的關鍵字 兩個東西下去搜尋  
+    title=[]
+    
+    browser = webdriver.Chrome(executable_path='/opt/anaconda3/envs/flask/bin/chromedriver')
+    browser.get("https://www.ltn.com.tw/")    
+    search_btn = browser.find_element_by_css_selector("a[class*='iconSearch']").click()
+    time.sleep(1)
+    keyword = browser.find_element_by_css_selector("div[class='ltnsch_show boxTitle boxText'] input[id='cacheSearch']")
+    # keyword = browser.find_element_by_id("qs")
+    keyword.send_keys(user_input+" "+msg_choose)
+    keyword.send_keys(Keys.RETURN)
+    # for i in range(0,len(finallist)):
+    #     print(finallist[i])
+    # print(browser.current_url)
+    url_final = requests.get(browser.current_url)
+    soup_final = BeautifulSoup(url_final.text, 'html.parser')
+    temp_final=soup_final.find('a', class_='tit')
+    title.append(temp_final.text)
+    title.append(temp_final.get('href'))
+    #temp_ltn_link=temp_final.get('href')
+    #print("自由時報ltn:")
+    #print(temp_final.text+":"+temp_ltn_link)
+    print(title)
+    browser.quit()
+    return title
+    #return temp_ltn_link
+#########################################################
+def third_part(user_input,msg_choose):
+    #處理完自由時報並取得關鍵字後進入聯合報搜尋
+    browser = webdriver.Chrome(executable_path='/opt/anaconda3/envs/flask/bin/chromedriver')
+    browser.get('https://udn.com/mobile/index')
+    browser.maximize_window()
+    js = "document.getElementById('searchbox').style.display='block'" #编写JS语句
+    browser.execute_script(js) #执行JS
+    # keyword = browser.find_element_by_css_selector('a[class*="toprow_search sp"]').click()
+    search_btn = browser.find_element_by_class_name("search_kw")
+    search_btn.send_keys(user_input+" "+msg_choose)
+    search_btn.submit()
+    keyword=browser.find_element_by_class_name("search_submit")
+    keyword.click()
+    # print(browser.current_url)
+    url = requests.get(browser.current_url)
+    soup = BeautifulSoup(url.text, 'html.parser')
+    print("網站內容")
+    #print(soup.prettify())
+    temp=soup.find('div',{'id':'search_content'}).find('dt')
+    temp_udn_link=temp.find('a').get('href')
+    print("聯合報udn:")
+    print(temp.find('h2').text+':'+temp_udn_link)
+    browser.quit()
+    return temp_udn_link
+#########################################################
+def fourth_part(udn_link, ltn_link):#這邊最新的1/14
+    #jieba.set_dictionary(r'C:\Users\ASUS\Desktop\dict.txt.big.txt')
+    ubn_article=""
+    ltn_article=""
+    china_article=""
+    ubn_url = requests.get(udn_link)
+    ltn_url = requests.get(ltn_link)
+    #china_url=requests.get('https://www.chinatimes.com/newspapers/20191128000208-260301?chdtv')
+    ubn_soup = BeautifulSoup(ubn_url.text, 'html.parser')
+    ltn_soup = BeautifulSoup(ltn_url.text, 'html.parser')
+    #china_soup= BeautifulSoup(china_url.text, 'html.parser')
+    
+    #處理ubn
+    for temp in ubn_soup.find_all('p'):
+        #print(temp.text)
+        ubn_article+=temp.text
+    print("UBN：")
+    try:
+        ubn_article=ubn_article.replace("分享   facebook","")
+        ubn_article=ubn_article.split("》")[0]
+        ubn_article=ubn_article.split("      ")[1]
+        print("整理後",ubn_article)
+    except:
+        print("沒辦法擋UBN")
+    
+    
+    # words=jieba.posseg.lcut(ubn_article)
+    #for word in words:
+        #print(word)
+    #print(jieba.analyse.extract_tags(ubn_article,topK=20, withWeight=False, allowPOS=('x')))
+    #先處理ltn
+    f_ltn_article=""
+    for temp in ltn_soup.find_all('p'):
+        #print(temp.text)
+        ltn_article+=temp.text
+    print("LTN：")
+    #print(ltn_article.split("。"))
+    for m in range(0,len(ltn_article.split("。"))-1):
+        f_ltn_article+=ltn_article.split("。")[m]
+        f_ltn_article+="。"
+    ltn_article=f_ltn_article
+    print("整理前：\n",ltn_article)
+    
+    try:
+        ltn_article=ltn_article.replace("為達最佳瀏覽效果，建議使用 Chrome、Firefox 或 Microsoft Edge 的瀏覽器。","")
+        ltn_article=ltn_article.replace("請繼續往下閱讀...","")
+        ltn_article=ltn_article.replace("圖／","")
+        ltn_article=ltn_article.split("報導〕")[1]
+        ltn_article=ltn_article.split("看更多報導：")[0]
+        print("整理後:",ltn_article)
+    except:
+        print("沒辦法擋掉LTN")
+    # words=jieba.posseg.lcut(ltn_article)
+    #for word in words:
+        #print(word)
+    #print(jieba.analyse.extract_tags(ltn_article,topK=20, withWeight=False, allowPOS=('x')))
+    
+    '''
+    #處理中時
+    for temp in china_soup.find_all('p'):
+        #print(temp.text)
+        china_article+=temp.text
+    print("CHINA：")
+    print(china_article)
+    words=jieba.posseg.lcut(china_article)
+    '''
+    #for word in words:
+        #print(word)
+    #print(jieba.analyse.extract_tags(china_article,topK=20, withWeight=False, allowPOS=('x')))
+
+    # 這邊開始做摘要
+    # text = ubn_article+ltn_article+china_article
+    # text = codecs.open('../test/doc/01.txt', 'r', 'utf-8').read()
+    # text = ubn_article+ltn_article#還沒抓中時 先測聯合跟自由
+    
+    # tr4w = TextRank4Keyword()
+    # tr4w.analyze(text=text, lower=True, window=2)  # py2中text必须是utf8编码的str或者unicode对象，py3中必须是utf8编码的bytes或者str对象
+
+
+    # tr4s = TextRank4Sentence()
+    # tr4s.analyze(text=text, lower=True, source = 'all_filters')
+    # print()
+    # print( '摘要：' )
+    # abstract=""
+    # for item in tr4s.get_key_sentences(num=3):
+    #     # print(item.sentence)
+    #     abstract+=item.sentence
+    #     #print(item.index, item.weight, item.sentence)  # index是语句在文本中位置，weight是权重
+    #     print(abstract)
+    # print(item.sentence)
+
+    article=ubn_article+ltn_article
+    print("ARTICLE\n",article)
+    abstract=""
+    
+    parser = PlaintextParser.from_string(article, Tokenizer("chinese"))
+    summarizer = LsaSummarizer()
+    print("----摘要結果Lsa----\n")
+    for sentence in summarizer(parser.document, 2):
+        abstract+=str(sentence)
+        # print(sentence_2)
+    # abstract1=re.sub(r"\s+","", abstract)
+    # abstract1="".join(map(str, abstract))
+    print(abstract)
+    if len(abstract)<=1:
+        
+        tr4s = TextRank4Sentence()
+        tr4s.analyze(text=article, lower=True, source = 'all_filters')
+        print("TEXTRANK:\n")
+        for item in tr4s.get_key_sentences(num=2):
+            #print(item.index, item.weight, item.sentence)  # index是语句在文本中位置，weight是权重
+            print(item.sentence)
+            abstract+=str(item.sentence)
+    try:
+        if abstract.split("。")[0]==abstract.split("。")[1]:
+            abstract=abstract.split("。")[0]
+    except:
+        print("沒有句點")
+    return abstract
+#########################################################
+def fifth_part(content):#這邊最新的1/14
+    total=[]
+    person = jieba.analyse.extract_tags(content, topK=5, withWeight=False, allowPOS=('n','nt','nz','nr','nrfg','nrt'))
+    time = jieba.analyse.extract_tags(content, topK=3, withWeight=False, allowPOS=('t','tg','m'))
+    location = jieba.analyse.extract_tags(content, topK=3, withWeight=False, allowPOS=('ns'))
+    event = jieba.analyse.extract_tags(content, topK=20, withWeight=False)
+    words=pseg.cut(content)
+    for w in words:
+        print(w.word,w.flag)
+    print(person)
+    print(time)
+    print(location)
+    print(event)
+    total.append(person)
+    total.append(time)
+    total.append(location)
+    abstract="" #[]
+    try:
+        parser = PlaintextParser.from_string(content, Tokenizer("chinese"))
+        summarizer = LsaSummarizer()
+        print("----摘要結果Lsa----\n")
+        for sentence in summarizer(parser.document, 1):
+            abstract+=str(sentence)
+            print(abstract)
+    except:
+            tr4s = TextRank4Sentence()
+            tr4s.analyze(text=article, lower=True, source = 'all_filters')
+            print("TEXTRANK:\n")
+            for item in tr4s.get_key_sentences(num=1):
+                #print(item.index, item.weight, item.sentence)  # index是语句在文本中位置，weight是权重
+                print(item.sentence)
+                abstract+=str(item.sentence)
+    total.append(abstract)
+    
+    return total
+####################### 處理訊息 #########################
+@handler.add(MessageEvent, message=TextMessage)
+def handle_msg_message(event):
+    STR1=["台灣","中國","兩岸","大選","總統","習近平","韓國瑜","吳斯懷","選舉","國台辦","外交部","美國","貿易戰","脫歐","歐盟","黑鷹"]
+    STR2=[["中國","大選","美國"],["台灣","國台辦","美國"],["國台辦","貿易","反滲透"],["總統","立委","韓國瑜"],["蔡英文","韓國瑜","宋楚瑜"],["國台辦","貿易戰","協定"],["敗選","高雄","罷免"],["立委","吳敦義","國民黨"],["總統","小英","韓國瑜"],["台灣","九二共識","耿爽"],["記者會","選舉","日本"],["中國","台灣","伊朗"],["中國","協定","台灣"],["強森","歐盟","經濟"],["德國","英國","脫歐"],["蔡英文","國民黨","總長"]]
+    link=[['聯合報新聞：https://udn.com/news/story/7331/4290474\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041578', '聯合報新聞：https://udn.com/news/story/6809/4290069\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3038374', '聯合報新聞：https://udn.com/news/story/7238/4290212\n自由時報新聞：https://news.ltn.com.tw/news/business/breakingnews/3041747'], ['聯合報新聞：https://udn.com/news/story/7266/4290265\n自由時報新聞：https://news.ltn.com.tw/news/entertainment/breakingnews/3041705', '聯合報新聞：https://udn.com/news/story/7331/4289866\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041730', '聯合報新聞：https://udn.com/news/story/6811/4290397\n自由時報新聞：https://news.ltn.com.tw/news/world/breakingnews/3041563'], ['聯合報新聞：https://udn.com/news/story/7331/4289954\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041730', '聯合報新聞：https://udn.com/news/story/7238/4290195\n自由時報新聞：https://news.ltn.com.tw/news/business/breakingnews/3041099', '聯合報新聞：https://udn.com/news/story/7331/4289922\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041510'], ['聯合報新聞：https://udn.com/news/story/12667/4290460\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041310', '聯合報新聞：https://udn.com/news/story/12667/4289981\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041598', '聯合報新聞：https://udn.com/news/story/12667/4290035\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041749'], ['聯合報新聞：https://udn.com/news/story/120932/4290486\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041821', '聯合報新聞：https://udn.com/news/story/12667/4290035\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041749', '聯合報新聞：https://stars.udn.com/star/story/10088/4283256\n自由時報新聞：https://news.ltn.com.tw/news/politics/paper/1346152'], ['聯合報新聞：https://udn.com/news/story/12702/4289747\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3040852', '聯合報新聞：https://udn.com/news/story/6839/4288827\n自由時報新聞：https://news.ltn.com.tw/news/politics/paper/1345335', '聯合報新聞：https://udn.com/news/story/6809/4288852\n自由時報新聞：https://news.ltn.com.tw/news/world/breakingnews/3040682'], ['聯合報新聞：https://udn.com/news/story/12667/4289981\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041172', '聯合報新聞：https://udn.com/news/story/12667/4290035\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041749', '聯合報新聞：https://udn.com/news/story/7327/4289919\n自由時報新聞：https://news.ltn.com.tw/news/life/breakingnews/3040233'], ['聯合報新聞：https://udn.com/news/story/12667/4289981\n自由時報新聞：https://news.ltn.com.tw/news/entertainment/breakingnews/3041396', '聯合報新聞：https://udn.com/news/story/12667/4289981\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041215', '聯合報新聞：https://udn.com/news/story/12667/4289981\n自由時報新聞：https://news.ltn.com.tw/news/entertainment/breakingnews/3041396'], ['聯合報新聞：https://udn.com/news/story/6809/4290069\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041749', '聯合報新聞：https://udn.com/news/story/120920/4289260\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3040935', '聯合報新聞：https://udn.com/news/story/12667/4290035\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041749'], ['聯合報新聞：https://udn.com/news/story/7331/4289954\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041730', '聯合報新聞：https://udn.com/news/story/7331/4289866\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041578', '聯合報新聞：https://udn.com/news/story/6839/4288827\n自由時報新聞：https://news.ltn.com.tw/news/opinion/breakingnews/3039159'], ['聯合報新聞：https://udn.com/news/story/6839/4288827\n自由時報新聞：https://news.ltn.com.tw/news/world/breakingnews/3041563', '聯合報新聞：https://udn.com/news/story/6656/4289952\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041510', '聯合報新聞：https://udn.com/news/story/6809/4288539\n自由時報新聞：https://news.ltn.com.tw/news/politics/paper/1346147'], ['聯合報新聞：https://udn.com/news/story/7331/4283635\n自由時報新聞：https://news.ltn.com.tw/news/world/breakingnews/3041563', '聯合報新聞：https://udn.com/news/story/7238/4290212\n自由時報新聞：https://news.ltn.com.tw/news/life/breakingnews/3041745', '聯合報新聞：https://udn.com/news/story/6809/4290177\n自由時報新聞：https://news.ltn.com.tw/news/world/paper/1346189'], ['聯合報新聞：https://udn.com/news/story/6811/4290397\n自由時報新聞：https://news.ltn.com.tw/news/business/breakingnews/3041790', '聯合報新聞：https://udn.com/news/story/7238/4289218\n自由時報新聞：https://news.ltn.com.tw/news/business/breakingnews/3041609', '聯合報新聞：https://udn.com/news/story/7238/4289849\n自由時報新聞：https://news.ltn.com.tw/news/business/breakingnews/3041604'], ['聯合報新聞：https://udn.com/news/story/6809/4277736\n自由時報新聞：https://news.ltn.com.tw/news/business/breakingnews/3039957', '聯合報新聞：https://udn.com/news/story/6809/4287960\n自由時報新聞：https://news.ltn.com.tw/news/world/breakingnews/3035532', '聯合報新聞：https://udn.com/news/story/6811/4290356\n自由時報新聞：https://news.ltn.com.tw/news/world/breakingnews/3040882'], ['聯合報新聞：https://udn.com/news/story/6813/4290687\n自由時報新聞：https://news.ltn.com.tw/news/world/breakingnews/3040421 ', '聯合報新聞：https://udn.com/news/story/120806/4289971\n自由時報新聞：https://news.ltn.com.tw/news/world/breakingnews/3040882', '聯合報新聞：https://udn.com/news/story/6809/4287960\n自由時報新聞：https://news.ltn.com.tw/news/world/breakingnews/3040882'], ['聯合報新聞：https://udn.com/news/story/10930/4290137\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3040949', '聯合報新聞：https://udn.com/news/story/10930/4288283\n自由時報新聞：https://news.ltn.com.tw/news/politics/paper/1346135', '聯合報新聞：https://udn.com/news/story/10930/4290137\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041493']]
+    summary=[['蔡英文總統連任後向大陸提出「和平、對等、民主、對話」，稱這八個字是兩岸重啟良性互動、長久穩定發展的關鍵，大陸國台辦發言人馬曉光昨天以四點回應，強調兩岸須堅持「九二共識」的共同政治基礎，「撼山易，撼『九二共識』難」。陸委會則呼籲中共首先正視中華民國是主權國家，台灣選舉結果是對未來台海情勢發展釋放堅定明確的信號，北京當局必須懂得尊重、勇敢面對現實。', '台灣總統大選甫落幕，歐洲議會今天在「共同外交暨安全政策」及「共同安全暨防禦政策」2項決議案中納入挺台條文，重申支持台灣參與國際組織。2020年總統暨立委選舉順利結束。選舉結果於昨晚確認後，美日兩國第一時間致賀，外交部今天並表示，目前已有超過60個國家或國際組織以賀電、賀函向我致賀，或政要透過社群網站、簡訊等方式，祝賀我國大選順利完成，也祝賀蔡總統順利連任。', '台積電表示，公司從未排除在美國設廠生產的可能性，只是目前尚無具體計畫，將依客戶需求考量。公司從未排除赴美國設廠生產的可能性，只是目前還沒有具體計畫。'], ['蔡英文總統連任後向大陸提出「和平、對等、民主、對話」，稱這八個字是兩岸重啟良性互動、長久穩定發展的關鍵，大陸國台辦發言人馬曉光昨天以四點回應，強調兩岸須堅持「九二共識」的共同政治基礎，「撼山易，撼『九二共識』難」。陸委會則呼籲中共首先正視中華民國是主權國家，台灣選舉結果是對未來台海情勢發展釋放堅定明確的信號，北京當局必須懂得尊重、勇敢面對現實。', '北京當局必須懂得尊重、勇敢面對現實，更須深刻思考這段時間以來，其「一廂情願」與強制打壓都無法改變這個事實。陸委會指出，北京當局應理性思考蔡總統提出「和平、對等、民主、對話」的兩岸互動關鍵基礎，才是真正有利於各自發展與人民福祉。', '耿爽宣稱，以上兩個組織，長期以來一直戴著「有色眼鏡」看待中國。因此這些涉華言論、報告，是在「罔顧事實、顛倒黑白，毫無客觀性可言，完全不值一駁」。'], ['民進黨秘書長羅文嘉今天下午強調，這次台灣人民用選票告訴中共和全世界，對未來發展的看法就是「反一國兩制」，並向中國喊話「活在過去並不助於兩岸未來的和平發展」。陸委會也呼籲，中共必須首先正視中華民國是主權國家、台灣從來都不是中華人民共和國一部分的事實；認清台灣前途只有台灣2300萬人民有權決定，任何威脅利誘都不會撼動我們對維護國家主權與民主自由的堅定信念。', '許勝雄指出，目前看起來國、內外的經濟面都不錯，尤其美中要簽第1階段協議，另外美國總統選舉前不會有局勢大變化，全球市場信心可以穩定下來，只要世界好，台灣就一定好，台灣有充沛的人才、環境、國際化布局和國際誠信等條件，有雄厚的實力，樂觀看待2020年（經濟發展）三三會今天中午舉行1月份例會，三三會理事長許勝雄會前受訪表示，美中貿易戰將簽第1階段協議，全球市場信心可以穩定下來，台灣產業有雄厚實力、競爭力，只要世界經濟局勢好，台灣經濟表現就會向上', '「反滲透法」今日公布施行，陸委會表示，已會同內政部、外交部、法務部、中選會及海基會等相關單位共同成立「因應反滲透法施行協調小組」，持續追蹤執法狀況並蒐整相關案例，進行滾動式檢討；未來法案如有研修的需求，將由所涉業管機關視情形領銜修法，再會銜其他機關，依一般法制作業程序來進行。中共方面一再惡意扭曲、混淆視聽，意圖對我分化離間，只會讓臺灣人民更加反感，也無助於兩岸關係正面發展。'], ['國民黨在2020年總統、立委選舉中大敗，黨內青壯派出現捨棄「九二共識」的聲浪，主張統一立場鮮明的新黨主席郁慕明對此嗆聲，批評為了拿選票而「放棄中心思想」的行為就是「漢奸」。國民黨昨天針對二○二○總統及立委選舉敗選提出檢討報告，臚列七大原因。', '2020大選落幕，台聯僅獲得0.3%政黨票，黨主席劉一德今天向中執會提出辭呈，但中執委全數不通過；劉一德即日起請假，思考個人未來，請假期間，黨主席職務由前立委周倪安代理。台灣團結聯盟下午召開中執會，劉一德在會中感謝夥伴選戰辛勞，他說，「大家都盡力了」，並提及「現行選制不利小黨」。', '總統大選結束，高雄市長韓國瑜回歸市政，今晚他在臉書以「回歸生活，攜手向前」為題發文表示，他理解大家失落的心情，但選舉是一時、團結向前走才是一世，擦乾眼淚後就抬頭望向天空，為這片土地一起努力吧！今日韓國瑜表示，他將回歸市政，至於謝票行程，韓國瑜表示，「等各位歡喜過完金鼠年後，會在市政之餘，安排向大家謝票感謝惜福的行程」'], ['蔡英文總統勝選後接受英國廣播公司（ＢＢＣ）專訪，她表示，「我們已經是一個獨立的國家，我們稱自己是中華民國（台灣）（Republic of China （Taiwan））。」同時她也表示，中國若侵略台灣將付出很大的代價。這段訪問引發國際間注目，甚至登上美國知名社群媒體「Reddit」的熱門話題，有美國網友諷刺地留言說「台灣大陸（Mainland Taiwan）看到應該不太開心」。', '總統大選結束，高雄市長韓國瑜回歸市政，今晚他在臉書以「回歸生活，攜手向前」為題發文表示，他理解大家失落的心情，但選舉是一時、團結向前走才是一世，擦乾眼淚後就抬頭望向天空，為這片土地一起努力吧今日韓國瑜表示，他將回歸市政，至於謝票行程，韓國瑜表示，「等各位歡喜過完金鼠年後，會在市政之餘，安排向大家謝票感謝惜福的行程」', '于美人選前臨危授命成為總統候選人宋楚瑜發言人，昨天選舉結果出爐，宋陣營敗選，而于美人也卸下發言人身分，回歸日常，她昨深夜開直播分享心路歷程，她說一開始接下這工作，不少人企圖在她「失控廚房」的粉專混淆視聽，但她慶幸粉絲沒有被政治所操弄，她講到這裡忍不住哽咽，「因為我覺得大家太棒了，我們不讓政治干擾我們的生活，而我們做到了。」'], ['兩岸政策協會理事長譚耀南表示，以和平與對等方式處理兩岸歧見，正視中華民國的存在，對話也是要政府與政府之間對等坐下談，中華民國是台灣人民最大的公約數。台師大政研所教授范世平指出，昨天親中媒體社論談及，希望中共正視蔡英文總統1月11日的談話，且昨天香港中評社的快論，指兩岸關係更趨嚴峻，但並非完全無對話空間，這部分可看出一些端倪。', '風險 習政權內外交迫 恐升高台海緊張當台灣民眾明確透過手中選票，拒絕中國的併吞意圖，蔡英文也在勝選記者會上以「和平、對等、民主、對話」四項概念，向北京當局喊話，期望兩岸人民能夠互惠互利、拉近距離。中華經濟研究院WTO及RTA中心副執行長李淳指出，川普政府一向務實且重視農業州選民利益，先前與歐盟、日、韓談判時，都將農產品開放列為優先項目，美國將於11月舉行總統大選，確實可能要求台灣先放寬對美牛、美豬的進口限制，再商討實質議題。', '華府智庫「美國企業研究所」（American Enterprise Institute,AEI）研究員狄森（Marc Thiessen）曾任美國前總統小布希（George W. Bush）文膽，他目前兼任「華盛頓郵報」（Washington Post）專欄作家。他說，台美FTA不只可能促進美國經濟並提高出口，還能增加對中國壓力，並在美國國會獲得跨黨派支持。'], ['國民黨主席吳敦義今天下午率相關黨務主管向中常會提出總辭，同時也就這次總統、立委選舉敗選原因提出檢討報告，其中羅列7大敗因，分別為「討厭民進黨」終不敵「亡國感」﹔兩岸論述未能掌握話語權，無法因應當下變局﹔惡質網軍帶領風向，候選人品牌形象飽受挑戰，難以爭取中間選民認同﹔高雄市長勝選模式無法複製，選戰策略選擇失誤﹔黨內矛盾不團結，輔選力道仍待加強﹔不分區名單未能符合外界期待﹔以及青年參與政治程度高，不受青年選民青睞。國民黨這份報告對於該黨總統候選人韓國瑜有諸多直白的檢討與質疑，包括在這次競選過程中，因為市長就職之後不到半年即宣布參選總統，無法彌平落跑市長的爭議，誠信問題受到質疑，而且過去在高雄市議會備詢跳針式回答、太平島挖石油、迪士尼到高雄、賽馬場、賽車場等極具話題性的政見逐一跳票，能力問題飽受懷疑，再加上失言、歧視語言、違規農舍、豪宅案、麻將照到新莊王小姐案等等事件，私德問題也備受考驗，庶民形象大大削減。', '總統大選結束，高雄市長韓國瑜回歸市政，今晚他在臉書以「回歸生活，攜手向前」為題發文表示，他理解大家失落的心情，但選舉是一時、團結向前走才是一世，擦乾眼淚後就抬頭望向天空，為這片土地一起努力吧！今日韓國瑜表示，他將回歸市政，至於謝票行程，韓國瑜表示，「等各位歡喜過完金鼠年後，會在市政之餘，安排向大家謝票感謝惜福的行程」', '市長韓國瑜敗選返回市府上班，未來他在議會定期大會面對民意監督還有一場硬仗，屆時定期大會的質詢將再成焦點。不過，時代力量市議員林于凱發布新聞稿質疑時程延到4月16日開議是要助韓國瑜躲質詢避出糗，疑與罷免案有關。'], ['吳斯懷列入不分區立委名單時外界曾質疑是否會洩露國家機密，也因此讓國民黨民調下滑。吳斯懷強調，如果洩密的話，就把他「關進去，關到死」，一頓飯都不吃只喝水，表示不會對不起中華民國。', '儘管要求吳斯懷辭立委的浪潮如驚滔駭浪襲捲國民黨，但事實上，要求吳斯懷辭跟「會不會辭」是兩碼子事情。所以，是誰力保吳斯懷得免於外部壓力而辭去立委之職？', '吳斯懷列入不分區立委名單時外界曾質疑是否會洩露國家機密，也因此讓國民黨民調下滑。吳斯懷強調，如果洩密的話，就把他「關進去，關到死」，一頓飯都不吃只喝水，表示不會對不起中華民國。'], ['國民黨在2020年總統、立委選舉中大敗，黨內青壯派出現捨棄「九二共識」的聲浪，主張統一立場鮮明的新黨主席郁慕明對此嗆聲，批評為了拿選票而「放棄中心思想」的行為就是「漢奸」。國民黨昨天針對二○二○總統及立委選舉敗選提出檢討報告，臚列七大原因。', '蔡英文總統勝選後接受英國廣播公司（ＢＢＣ）專訪，她表示，「我們已經是一個獨立的國家，我們稱自己是中華民國（台灣）（Republic of China （Taiwan））。」同時她也表示，中國若侵略台灣將付出很大的代價。這段訪問引發國際間注目，甚至登上美國知名社群媒體「Reddit」的熱門話題，有美國網友諷刺地留言說「台灣大陸（Mainland Taiwan）看到應該不太開心」。', '總統大選結束，高雄市長韓國瑜回歸市政，今晚他在臉書以「回歸生活，攜手向前」為題發文表示，他理解大家失落的心情，但選舉是一時、團結向前走才是一世，擦乾眼淚後就抬頭望向天空，為這片土地一起努力吧今日韓國瑜表示，他將回歸市政，至於謝票行程，韓國瑜表示，「等各位歡喜過完金鼠年後，會在市政之餘，安排向大家謝票感謝惜福的行程」'], ['民進黨秘書長羅文嘉今天下午強調，這次台灣人民用選票告訴中共和全世界，對未來發展的看法就是「反一國兩制」，並向中國喊話「活在過去並不助於兩岸未來的和平發展」。陸委會也呼籲，中共必須首先正視中華民國是主權國家、台灣從來都不是中華人民共和國一部分的事實；認清台灣前途只有台灣2300萬人民有權決定，任何威脅利誘都不會撼動我們對維護國家主權與民主自由的堅定信念。', '陸委會指出，北京當局應理性思考蔡總統提出「和平、對等、民主、對話」的兩岸互動關鍵基礎，才是真正有利於各自發展與人民福祉。陸委會強調，北京當局應理性思考蔡總統提出「和平、對等、民主、對話」的兩岸互動關鍵基礎，才是真正有利於各自發展與人民福祉。', '風險 習政權內外交迫 恐升高台海緊張當台灣民眾明確透過手中選票，拒絕中國的併吞意圖，蔡英文也在勝選記者會上以「和平、對等、民主、對話」四項概念，向北京當局喊話，期望兩岸人民能夠互惠互利、拉近距離。中華經濟研究院WTO及RTA中心副執行長李淳指出，川普政府一向務實且重視農業州選民利益，先前與歐盟、日、韓談判時，都將農產品開放列為優先項目，美國將於11月舉行總統大選，確實可能要求台灣先放寬對美牛、美豬的進口限制，再商討實質議題。'], ['風險 習政權內外交迫 恐升高台海緊張當台灣民眾明確透過手中選票，拒絕中國的併吞意圖，蔡英文也在勝選記者會上以「和平、對等、民主、對話」四項概念，向北京當局喊話，期望兩岸人民能夠互惠互利、拉近距離。中華經濟研究院WTO及RTA中心副執行長李淳指出，川普政府一向務實且重視農業州選民利益，先前與歐盟、日、韓談判時，都將農產品開放列為優先項目，美國將於11月舉行總統大選，確實可能要求台灣先放寬對美牛、美豬的進口限制，再商討實質議題。', '外交部表示，交流過程中，他們都恭賀蔡總統連任，並讚揚台灣人民透過此次選舉，向全世界傳達捍衛民主自由的堅定立場。中共方面一再惡意扭曲、混淆視聽，意圖對我分化離間，只會讓臺灣人民更加反感，也無助於兩岸關係正面發展。', '至於美國是否在會談中要求南韓派兵荷莫茲海峽一事，康京和表示，美方一直認為與荷莫茲海峽存在經濟利害關係的國家都應做出貢獻，鑑於南韓70%的原油進口依賴該地區，應該對此予以關注南韓。康京和於美國時間14日在舊金山與美國、日本兩國外長舉行雙邊和三邊會談後，會見媒體記者時做上述表示'], ['國際人權組織「人權觀察」、「自由之家」今日發表的今年世界人權報告中皆指出，中國人權意識嚴重低落。耿爽宣稱，以上兩個組織，長期以來一直戴著「有色眼鏡」看待中國。', '蔡英文總統連任後向大陸提出「和平、對等、民主、對話」，稱這八個字是兩岸重啟良性互動、長久穩定發展的關鍵，大陸國台辦發言人馬曉光昨天以四點回應，強調兩岸須堅持「九二共識」的共同政治基礎，「撼山易，撼『九二共識』難」。陸委會則呼籲中共首先正視中華民國是主權國家，台灣選舉結果是對未來台海情勢發展釋放堅定明確的信號，北京當局必須懂得尊重、勇敢面對現實。', '「抵抗」是指阿拉伯人和伊朗人反擊美國、以色列及諸如沙烏地阿拉伯、阿拉伯聯合大公國等華府的阿拉伯盟友。龐皮歐表示，威嚇力的重要性不限於伊朗，美國為了捍衛自由，也會威嚇中國和俄羅斯等其他敵國。'], ['美中雙方即將在今天稍晚正式簽署第1階段貿易協議，投資人等待進一步消息，美股開盤維持平盤。美國總統川普及中國國務院總理劉鶴，預計將在台北時間凌晨00:30正式在白宮簽署第1階段貿易協議，投資人正等待這場延續近2年的貿易戰達成階段性協議，也在觀望簽署後才會釋出的正式協議文本內容。', '許勝雄今天於三三企業交流會會前受訪時表示，全世界經濟上來了，台灣經濟必然可以上來，國際預測機構估2019年全球經濟成長率落在3%左右、2020年有機會達3.4%，台灣經濟受惠於美中貿易戰帶來台商回流、國際企業赴台投資，國內也有政府投資與消費，據主計總處預測，2020年經濟成長率為2.72%，優於2019年的2.64%此外，許勝雄指出，政府應積極爭取加入跨太平洋夥伴全面進步協定（CPTPP）、區域全面經濟夥伴關係協定（RCEP），以及簽訂更多自由貿易協定（FTA），這是攸關台灣國際競爭力的重要議題，否則和韓國、越南、新加坡相比，台灣招商引資的力度會被弱化', '技嘉（2376）已經成立 33年，近幾年公司內逐步啟動世代交替，也嘗試通路、手機、車電、工業電腦等新事業，董事長葉培城說，「我們創辦的這一代，說年輕不年輕、說老不老，公司也要做主機板以外的事，有一些新產品、市場趨勢也需要新思維，像之前做手機的時候，都叫他們（下屬）不要問我因為我的使用習慣可能跟不一樣，怕誤導他們，這種事一定要讓中生代進來」未來兩岸，林伯豐認為，蔡英文總統連任，第二任的任期空間相對寬闊，也有很多選擇，她要怎麼選，大陸要怎麼回應，雙邊都要有智慧，對方能接受什麼、台灣能接受什麼，都有了解在，這就是願不願意做，做的結果是對台灣好還是不好要好好判斷'], ['英國首相強森則表示，2020完全脫歐是「勢在必行」但願意與歐盟進行友善的合作。對於脫歐現況，Whitten指出，英國首相強森（Boris Johnson）已排除了無協議硬脫歐的可能性，讓企業和消費者都更加樂觀。英國下議院則已在本月10日通過「脫歐協議法案」（Withdrawal Agreement Bill），若立法程序完成，英國將於1月31日脫歐。', '英國官員今天宣布，日皇德仁接受英國女王伊麗莎白二世邀請，將在未來幾個月內前往英國進行國是訪問，並成為英國脫歐後的首場國是訪問。英國下議院今天以330票贊成、231票反對，多達99票優勢通過脫歐法案，下週將送往上議院，完成接下來的立法程序，確定於1月31日與歐洲聯盟分手。', '貝倫堡銀行（Berenberg bank）分析師史密丁（Holger Schmieding）表示，展望未來，德國經濟成長的黃金10年已逐漸接近尾聲。不過，國際債信評等公司穆迪（Moody）昨天示警，全球環境惡化將在2020年對歐元區成員國的開放經濟體成長帶來壓力。'], ['英國、法國、德國等歐洲強國今（14）日宣布，將啟動2015年《伊朗核協議》中的糾紛調解機制，限期各締約方15日內達成共識，這是歐洲自伊朗收回核武承諾後，所採取最大動作的回應。正式啟動核協議的爭端解決機制後，等於正式指控伊朗違反協議條款，並且可能促使聯合國重新啟動對伊朗的制裁。', '美、英、法、德、俄、中6國及歐盟於2015年與伊朗達成核子協議，伊朗承諾限制發展核武，換取各國解除對伊朗的制裁。但川普於2017年上任後對伊朗轉趨強硬，繼而於2018年退出協議，恢復對伊朗的制裁，伊朗則接連違反核子協議承諾。', '英國官員今天宣布，日皇德仁接受英國女王伊麗莎白二世邀請，將在未來幾個月內前往英國進行國是訪問，並成為英國脫歐後的首場國是訪問。英國下議院今天以330票贊成、231票反對，多達99票優勢通過脫歐法案，下週將送往上議院，完成接下來的立法程序，確定於1月31日與歐洲聯盟分手。'], ['今年63歲的黃曙光為明天將接任參謀總長，軍方人士指出，潛艦國造政策推行多年，但在總統蔡英文上任以後才真正大有進展，除了黃曙光本身實事求是、按部就班的行事風格外，由於曾任國軍潛艦要職，加上軍事歷練豐富，也具有令人服氣的領導風格，因此脫穎而出，以黃任職司令期間推動的潛艦計畫，未來對於潛艦國造是一大助力', '國防部昨舉行參謀總長沈一鳴、總士官長韓正宏等八位黑鷹直升機失事殉職將士的聯合公奠典禮，蔡英文總統親自頒授獎章、追晉官階及頒贈褒揚令給將士家屬，致詞時並宣布行政院已核定通過士官長專業加給、空降特戰勤務加給及飛行軍官續服獎助金等三項國軍加給', '國防部今天宣布新總長人事案，由上將之中期別最資深的海軍司令黃曙光上將接任']]
+    keyword=[[[['蔡總統', '北京當局', '馬曉光'], ['勝選之夜', '1/15'], ['兩岸', '國台辦'], '蔡英文總統連任後向大陸提出「和平、對等、民主、對話」，稱這八個字是兩岸重啟良性互動、長久穩定發展的關鍵，大陸國台辦發言人馬曉光昨天以四點回應，強調兩岸須堅持「九二共識」的共同政治基礎，「撼山易，撼『九二共識』難」。'], [['歐洲議會', '外交部', '蔡總統'], ['1/15 1/12'], ['台灣', '歐洲'], '台灣總統大選甫落幕，歐洲議會今天在「共同外交暨安全政策」及「共同安全暨防禦政策」2項決議案中納入挺台條文，重申支持台灣參與國際組織。'], [['台積電'], ['1\r'], ['台灣 美國'], '台積電表示，公司從未排除在美國設廠生產的可能性。']], [[['蔡總統', '北京當局', '馬曉光'], ['勝選之夜', '1/15'], ['兩岸', '國台辦'], '蔡英文總統連任後向大陸提出「和平、對等、民主、對話」，稱這八個字是兩岸重啟良性互動、長久穩定發展的關鍵，大陸國台辦發言人馬曉光昨天以四點回應，強調兩岸須堅持「九二共識」的共同政治基礎，「撼山易，撼『九二共識』難」。'], [['北京當局', '陸委會', '蔡總統'], ['1 15'], ['北京', '台灣', '兩岸'], '陸委會指出，北京當局應理性思考蔡總統提出「和平、對等、民主、對話」的兩岸互動關鍵基礎，才是真正有利於各自發展與人民福祉。'], [['耿爽', '中國 '], ['1\r'], ['中國', '美國'], '因此這些涉華言論、報告，是在「罔顧事實、顛倒黑白，毫無客觀性可言，完全不值一駁」。']], [[['陸委會', '民進黨秘書長 羅文嘉'], ['1\r下午'], ['台灣', '中國'], '陸委會也呼籲，中共必須首先正視中華民國是主權國家、台灣從來都不是中華人民共和國一部分的事實；認清台灣前途只有台灣2300萬人民有權決定，任何威脅利誘都不會撼動我們對維護國家主權與民主自由的堅定信念。'], [['三三會理事長許勝雄'], ['1\r', '三三會會前'], ['全球市場'], '三三會理事長許勝雄會前受訪表示，美中貿易戰將簽第1階段協議，全球市場信心可以穩定下來，台灣產業有雄厚實力、競爭力，只要世界經濟局勢好，台灣經濟表現就會向上'], [['陸委會', '內政部', '法務部', '海基會', '中選會'], ['1\r'], ['台灣'], '「反滲透法」今日公布施行，陸委會表示，已會同相關單位共同成立「因應反滲透法施行協調小組」，持續追蹤執法狀況並蒐整相關案例，進行滾動式檢討。中共方面一再惡意扭曲、混淆視聽，意圖對我分化離間，只會讓臺灣人民更加反感，也無助於兩岸關係正面發展。']], [[['國民黨', '新黨主席郁慕明'], ['1/15昨天'], ['國民黨內'], '國民黨昨天針對二○二○總統及立委選舉敗選提出檢討報告，臚列七大原因。'], [['台灣團結聯盟 劉德一'], ['1/15下午'], ['中執會'], '台灣團結聯盟下午召開中執會，劉一德在會中感謝夥伴選戰辛勞，他說，「大家都盡力了」，並提及「現行選制不利小黨」。'], [['韓國瑜', '高雄市'], ['1/11今晚'], ['台灣', '高雄'], '總統大選結束，高雄市長韓國瑜回歸市政，今晚他在臉書以「回歸生活，攜手向前」為題發文表示，他理解大家失落的心情，但選舉是一時、團結向前走才是一世，擦乾眼淚後就抬頭望向天空，為這片土地一起努力吧！']], [[['蔡英文'], ['勝選後'], ['ＢＢＣ'], '蔡英文總統勝選後接受英國廣播公司（ＢＢＣ）專訪，她表示，「我們已經是一個獨立的國家，我們稱自己是中華民國（台灣）（Republic of China （Taiwan））。」'], [['韓國瑜', '高雄市'], ['1/11今晚'], ['台灣', '高雄'], '總統大選結束，高雄市長韓國瑜回歸市政，今晚他在臉書以「回歸生活，攜手向前」為題發文表示，他理解大家失落的心情，但選舉是一時、團結向前走才是一世，擦乾眼淚後就抬頭望向天空，為這片土地一起努力吧！'], [['宋楚瑜發言人 于美人'], ['1/12'], ['宋陣營'], '鑑於時代力量不分區立委當選人「小燈泡媽媽」王婉諭遭網友留言恐嚇，大選時擔任親民黨總統候選人宋楚瑜發言人的于美人，昨邀集總統大選各陣營發言人茶敘。']], [[['兩岸政策協會理事長譚耀南', '台師大政研所'], ['1月11日'], ['台灣 中華民國'], '兩岸政策協會理事長譚耀南表示，以和平與對等方式處理兩岸歧見，正視中華民國的存在，對話也是要政府與政府之間對等坐下談，中華民國是台灣人民最大的公約數。'], [['李淳', '川普', '習政權', '蔡英文'], ['11月', '1 15'], ['台灣', '中國', '中華經濟研究院'], '中華經濟研究院WTO及RTA中心副執行長李淳指出，川普政府一向務實且重視農業州選民利益，先前與歐盟、日、韓談判時，都將農產品開放列為優先項目，美國將於11月舉行總統大選，確實可能要求台灣先放寬對美牛、美豬的進口限制，再商討實質議題。'], [['華府智庫研究員 狄森'], ['1 15'], ['華盛頓郵報', '台美ＦＴＡ'], '華府智庫研究員狄森說，台美FTA不只可能促進美國經濟並提高出口，還能增加對中國壓力，並在美國國會獲得跨黨派支持。']], [[['國民黨主席吳敦義'], ['今天（15號）下午'], ['中常會', '高雄'], '國民黨主席吳敦義今天下午率相關黨務主管向中常會提出總辭，同時也就這次總統、立委選舉敗選原因提出檢討報告，羅列7大敗因'], [['高雄市長韓國瑜'], ['今晚（11號）'], ['高雄市'], '總統大選結束，高雄市長韓國瑜回歸市政，今晚他在臉書以「回歸生活，攜手向前」為題發文表示，他理解大家失落的心情，但選舉是一時、團結向前走才是一世，擦乾眼淚後就抬頭望向天空，為這片土地一起努力吧！'], [['市長韓國瑜', '時代力量市議員林于凱'], ['1 15', '4月16日'], ['市長', '議會', '大會面'], '市長韓國瑜敗選返回市府上班，未來他在議會定期大會面對民意監督還有一場硬仗，屆時定期大會的質詢將再成焦點。']], [[['吳斯懷'], ['1 15'], ['國民黨', '中華民國'], '吳斯懷強調，如果洩密的話，就把他「關進去，關到死」，一頓飯都不吃只喝水，表示不會對不起中華民國。'], [['吳斯懷'], ['1 15'], ['國民黨內'], '儘管要求吳斯懷辭立委的浪潮如驚滔駭浪襲捲國民黨，但事實上，要求吳斯懷辭跟「會不會辭」是兩碼子事情。'], [['吳斯懷'], ['1 15'], ['國民黨', '中華民國'], '吳斯懷強調，如果洩密的話，就把他「關進去，關到死」，一頓飯都不吃只喝水，表示不會對不起中華民國。']], [[['國民黨', '新黨主席郁慕明'], ['1/15昨天'], ['國民黨內'], '國民黨昨天針對二○二○總統及立委選舉敗選提出檢討報告，臚列七大原因。'], [['蔡英文'], ['勝選後'], ['ＢＢＣ'], '蔡英文總統勝選後接受英國廣播公司（ＢＢＣ）專訪，她表示，「我們已經是一個獨立的國家，我們稱自己是中華民國（台灣）（Republic of China （Taiwan））。」'], [['韓國瑜', '高雄市'], ['1/11今晚'], ['台灣', '高雄'], '總統大選結束，高雄市長韓國瑜回歸市政，今晚他在臉書以「回歸生活，攜手向前」為題發文表示，他理解大家失落的心情，但選舉是一時、團結向前走才是一世，擦乾眼淚後就抬頭望向天空，為這片土地一起努力吧！']], [[['中共', '陸委會', '民進黨秘書長 羅文嘉'], ['今天下午'], ['台灣'], '民進黨秘書長羅文嘉今天下午強調，這次台灣人民用選票告訴中共和全世界，對未來發展的看法就是「反一國兩制」，並向中國喊話「活在過去並不助於兩岸未來的和平發展」。'], [['陸委會', '北京當局', '蔡總統'], ['1 15'], ['兩岸'], '陸委會指出，北京當局應理性思考蔡總統提出「和平、對等、民主、對話」的兩岸互動關鍵基礎，才是真正有利於各自發展與人民福祉。'], [['蔡英文', '北京當局', '川普政府'], ['1 15', '11月'], ['台海'], '風險 習政權內外交迫 恐升高台海緊張當台灣民眾明確透過手中選票，拒絕中國的併吞意圖，蔡英文也在勝選記者會上以「和平、對等、民主、對話」四項概念，向北京當局喊話，期望兩岸人民能夠互惠互利、拉近距離。']], [[['蔡英文', '北京當局', '川普政府'], ['1 15', '11月'], ['台海'], '風險 習政權內外交迫 恐升高台海緊張當台灣民眾明確透過手中選票，拒絕中國的併吞意圖，蔡英文也在勝選記者會上以「和平、對等、民主、對話」四項概念，向北京當局喊話，期望兩岸人民能夠互惠互利、拉近距離。'], [['外交部', '蔡總統', '中共', '台灣人民'], ['1 15'], ['台灣'], '外交部表示，交流過程中，他們都恭賀蔡總統連任，並讚揚台灣人民透過此次選舉，向全世界傳達捍衛民主自由的堅定立場。'], [['美國', '南韓', '康京'], ['美國時間14日'], ['舊金山', '荷莫茲海峽'], '至於美國是否在會談中要求南韓派兵荷莫茲海峽一事，康京和表示，美方一直認為與荷莫茲海峽存在經濟利害關係的國家都應做出貢獻，鑑於南韓70%的原油進口依賴該地區，應該對此予以關注南韓。']], [[['耿爽'], ['1 15'], ['中國'], '國際人權組織「人權觀察」、「自由之家」今日發表的今年世界人權報告中皆指出，中國人權意識嚴重低落。'], [['蔡總統', '北京當局', '馬曉光'], ['勝選之夜', '1/15'], ['兩岸', '國台辦'], '蔡英文總統連任後向大陸提出「和平、對等、民主、對話」，稱這八個字是兩岸重啟良性互動、長久穩定發展的關鍵，大陸國台辦發言人馬曉光昨天以四點回應，強調兩岸須堅持「九二共識」的共同政治基礎，「撼山易，撼『九二共識』難」。'], [['龐皮歐'], ['1 13'], ['以色列'], '龐皮歐表示，威嚇力的重要性不限於伊朗，美國為了捍衛自由，也會威嚇中國和俄羅斯等其他敵國。']], [[['美國總統川普及中國國務院總理劉鶴'], ['台北時間凌晨00:30'], ['白宮'], '美國總統川普及中國國務院總理劉鶴，預計將在台北時間凌晨00:30正式在白宮簽署第1階段貿易協議，投資人正等待這場延續近2年的貿易戰達成階段性協議，也在觀望簽署後才會釋出的正式協議文本內容。'], [['許勝雄'], ['2019', '2020', '1 15今日'], ['台灣', '國內'], '許勝雄指出，政府應積極爭取加入跨太平洋夥伴全面進步協定（CPTPP）、區域全面經濟夥伴關係協定（RCEP），以及簽訂更多自由貿易協定（FTA），這是攸關台灣國際競爭力的重要議題，否則和韓國、越南、新加坡相比，台灣招商引資的力度會被弱化'], [['技嘉董事長葉培城', '林伯豐', '蔡英文'], ['1 15'], ['兩岸', '台灣'], '林伯豐認為，蔡英文總統連任，第二任的任期空間相對寬闊，也有很多選擇，她要怎麼選，大陸要怎麼回應，雙邊都要有智慧，對方能接受什麼、台灣能接受什麼，都有了解在，這就是願不願意做，做的結果是對台灣好還是不好要好好判斷']], [[['強森', 'Whitten'], ['1月31日'], ['英國', '英國下議院', '歐盟'], '英國首相強森則表示，2020完全脫歐是「勢在必行」但願意與歐盟進行友善的合作。'], [['德仁', '伊麗莎白二世'], ['1 10], ["英國下議院"], "英國下議院今天以330票贊成、231票反對，多達99票優勢通過脫歐法案，下週將送往上議院，完成接下來的立法程序，確定於1月31日與歐洲聯盟分手。"], [["貝倫堡銀行（Berenberg bank）分析師史密丁'], ['1 12昨天'], ['德國', '歐元區'], '貝倫堡銀行（Berenberg bank）分析師史密丁（Holger Schmieding）表示，展望未來，德國經濟成長的黃金10年已逐漸接近尾聲。']], [[['英國、法國、德國等歐洲強國'], ['今（14）日'], ['歐洲'], '正式啟動核協議的爭端解決機制後，等於正式指控伊朗違反協議條款，並且可能促使聯合國重新啟動對伊朗的制裁。'], [['川普'], ['1 15'], ['歐盟'], '但川普於2017年上任後對伊朗轉趨強硬，繼而於2018年退出協議，恢復對伊朗的制裁，伊朗則接連違反核子協議承諾。'], [['德仁', '伊麗莎白二世'], ['1 10'], ['英國下議院'], '英國下議院今天以330票贊成、231票反對，多達99票優勢通過脫歐法案，下週將送往上議院，完成接下來的立法程序，確定於1月31日與歐洲聯盟分手。']], [[['蔡英文', '黃曙光'], ['蔡英文上任以後'], ['國防部'], '除了黃曙光本身實事求是、按部就班的行事風格外，由於曾任國軍潛艦要職，加上軍事歷練豐富，也具有令人服氣的領導風格，因此脫穎而出'], [['蔡英文', '沈一鳴', '韓正宏'], ['1 13'], ['國防部'], '國防部昨舉行參謀總長沈一鳴、總士官長韓正宏等八位黑鷹直升機失事殉職將士的聯合公奠典禮，蔡英文總統親自頒授獎章、追晉官階及頒贈褒揚令給將士家屬'], [['黃曙光'], ['1 14'], ['國防部'], '國防部今天宣布新總長人事案，由上將之中期別最資深的海軍司令黃曙光上將接任']]]
+    link2=['聯合報新聞： https://udn.com/news/story/7331/4289954\n自由時報新聞： https://news.ltn.com.tw/news/politics/breakingnews/3042844', '聯合報新聞：https://udn.com/news/story/7239/4290452\n自由時報新聞：https://news.ltn.com.tw/news/world/breakingnews/3041810', '聯合報新聞：https://udn.com/news/story/7239/4290390\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041813', '聯合報新聞： https://udn.com/news/story/12667/4287849\n自由時報新聞： https://news.ltn.com.tw/news/politics/breakingnews/3042948', '聯合報新聞：https://udn.com/news/story/6809/4290508\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041819', '聯合報新聞： https://udn.com/news/story/12667/4291690\n自由時報新聞： https://news.ltn.com.tw/news/politics/breakingnews/3042571', '聯合報新聞：https://udn.com/news/story/7327/4290510\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041819', '聯合報新聞：https://udn.com/news/story/12667/4289981\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041813', '聯合報新聞： https://udn.com/news/story/6656/4291279\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041809', '聯合報新聞：https://udn.com/news/story/7331/4289954\n自由時報新聞：https://news.ltn.com.tw/news/politics/breakingnews/3041730', '聯合報新聞：https://udn.com/news/story/120806/4290042\n自由時報新聞： https://ec.ltn.com.tw/article/breakingnews/3041915', '聯合報新聞：https://udn.com/news/story/7270/4290571\n自由時報新聞：https://news.ltn.com.tw/news/world/breakingnews/3041753', '聯合報新聞： https://udn.com/news/story/12639/4292499\n自由時報新聞： https://ec.ltn.com.tw/article/breakingnews/3042731', '聯合報新聞：https://udn.com/news/story/6811/4290356\n自由時報新聞：https://news.ltn.com.tw/news/world/breakingnews/3040882', '聯合報新聞：https://udn.com/news/story/7243/4290405\n自由時報新聞：https://news.ltn.com.tw/news/business/breakingnews/3041134', '聯合報新聞： https://udn.com/news/story/10930/4292872\n自由時報新聞： https://news.ltn.com.tw/news/politics/breakingnews/3041906']
+    summary2=['大陸國台辦今（15）日舉行例行記者會，全場聚焦陸方如何解讀台灣大選的結果，陸委會傍晚表示，台灣從來都不是中華人民共和國的一部分，台灣前途只有台灣2,300萬人民有權決定。台灣總統大選落幕，美國智庫戰略暨國際研究中心（CSIS）亞洲事務資深顧問葛來儀（Bonnie Glaser）日前提到，她不認為中國除了對台動武外無選擇，未來4年對台會加大政治、經濟、軍事壓力，她今天（16日）接受媒體電訪指出，武統不是習近平近期目標，而中方希望民進黨下次落敗，所以接下來會尋找潛在合作對象，可能來自國民黨或是柯文哲、郭台銘。', '「偉人節」系列活動上，一名中國官員宣稱，毛澤東除了是偉大的領袖，也是神，而習近平新時代中國特色社會主義思想核心，就是要維護毛澤東的權威至高性，以傳承共產黨的紅色文化基因相關影片請見中國江西省上饒市市民在去年12月26日的「偉人節」系列活動上獻舞，以紀念毛澤東', '券商公會理事長賀鳴珩投資眼光精準，對市場敏感度特別高，在2018年10月全球股市大跌時就獨排眾議，看好具高殖利率優勢的台股將走出「台灣行情」，事後果然被印證，在去年挑「高」字做為今年經濟關鍵字，認為台股還會續創新高，看來也會如他預期。台股在金豬年開紅盤後重返萬點，至今未曾再跌破，吸引外資回補的主因之一就是高殖利率。', '國民黨立委陳學聖突破盲腸說，拿掉黨名「中國」兩字已討論過很多次，民進黨沒在黨名加「台灣」，大家一樣認為是本土政黨；新黨沒加「中國」，卻被大家覺得是統派，證明有沒有冠上這兩個字不重要，重要的是黨的內涵。民黨在2020選戰中大敗，同樣在本次選戰中爭取立委連任失利的陳學聖表示，這次大選他就是要看韓國瑜的選情，「他起來，我就起來；他沒起來，我也掛了」。', '謝金河建議，韓國瑜目前應該要顧好高雄，專心在市政上，「若去選黨主席一定會被罷免」。至於國民黨剛辭職的前主席吳敦義，謝金河則直言「吳敦義該退休，有點老年癡呆症了」；而過去在初選對決韓國瑜的鴻海創辦人郭台銘，謝金河則直呼郭是這次輸最慘的，幫親民黨助選卻無法過5％門檻，他認為，郭要選總統時很有氣勢，但後來一下找民眾黨、一下找親民黨，就像代工找客戶，「代工政治」沒有中心思想。', '台北市議員戴錫欽、李明賢、李柏毅、張斯綱昨前往馬英九基金會拜訪馬前總統，向馬英九請教「92共識」的真正內涵，以及日後有沒有調整的空間。馬英九認為，92共識不是不能調整，但是怎麼調整都必須符合中華民國憲法、民意支持，以及北京方面能夠接受做為雙方交流的共識，還有國際能夠理解等四個前提，賦予92共識新意涵。', '謝金河建議，韓國瑜目前應該要顧好高雄，專心在市政上，「若去選黨主席一定會被罷免」。至於國民黨剛辭職的前主席吳敦義，謝金河則直言「吳敦義該退休，有點老年癡呆症了」；而過去在初選對決韓國瑜的鴻海創辦人郭台銘，謝金河則直呼郭是這次輸最慘的，幫親民黨助選卻無法過5％門檻，他認為，郭要選總統時很有氣勢，但後來一下找民眾黨、一下找親民黨，就像代工找客戶，「代工政治」沒有中心思想。', '邱顯智15日再度說明想法，舉出多個不清楚民眾黨立場的例子，要求「與其輕言聯盟，不如就事論事」。」邱顯智指出，年改當初光落日條款就經過許多討論，而所謂「背信問題」也早經過大法官解釋處理，若民眾黨要再召開公聽會，時力會尊重，不過國民黨吳斯懷等人的訴求就是「把年改改回來」，他質疑，「讓一切回到原點，民眾黨又是否支持？', '總統蔡英文贏得2020總統大選成功連任，民進黨也獲得61席立委，達到「國會過半」目標。不過，知名主持人謝震武表示，他在選舉看到的結果是，政黨票只有3分之1的人投票給民進黨。他提醒民進黨「千萬不要囂張」，這也是接下來民進黨要被檢驗的地方。', '民進黨秘書長羅文嘉今天下午強調，這次台灣人民用選票告訴中共和全世界，對未來發展的看法就是「反一國兩制」，並向中國喊話「活在過去並不助於兩岸未來的和平發展」。陸委會也呼籲，中共必須首先正視中華民國是主權國家、台灣從來都不是中華人民共和國一部分的事實；認清台灣前途只有台灣2300萬人民有權決定，任何威脅利誘都不會撼動我們對維護國家主權與民主自由的堅定信念。', '伊朗外交部長查瑞夫今天表示，伊朗與世界強國達成的現行核協議還沒失靈，但若要跟美國總統川普達成新核武協議，他不確定能否持久。針對烏克蘭航空客機墜毀事件，伊朗官方終於承認為自家軍方所為，外交部長查里夫（Mohammad Javad Zarif）週三也首度承認伊朗的「謊言」，指出官方欺騙伊朗人民好幾天，是為了穩定民心。', '當年伍德裏奇（Woodridge）的16歲女孩帕梅拉·莫拉（Pamela Maurer）被綁架謀殺，謎團懸宕近半世紀，當初因為辦案技術不足而遲遲無法破案，但現在靠新的DNA鑑識技術，警方終於找到嫌犯，只可惜兇嫌早在1981年就過世。綜合媒體報導，1976年1月13日，16歲莫拉被發現陳屍路旁，死前一天她曾到麥當勞買飲料，自此再也沒有回家。', '美中今（16）日簽署第一階段協議。過去1年來，受惠於美中貿易爭端，台灣迎來轉單效應、台商回流等利多，相關效應是否隨美中貿易緊張情勢緩解而消失；台經院景氣中心副主任邱達生分析，這次協議內容，美方仍保留對中國價值3700億商品關稅，未來若中方履約生變，美方仍可隨時加徵關稅，對廠商而言，不確定因素仍在，因此供應鏈轉移、台商回流效應等仍將持續進行。', "貝倫堡銀行（Berenberg bank）分析師史密丁（Holger Schmieding）表示，展望未來，德國經濟成長的黃金10年已逐漸接近尾聲。不過，國際債信評等公司穆迪（Moody's）昨天示警，全球環境惡化將在2020年對歐元區成員國的開放經濟體成長帶來壓力。", '《CNBC》報導顯示，今年出席世界經濟論壇的大人物包括：芬蘭總理馬林（Sanna Marin）、歐盟執委會主席范德萊恩（Ursula von der Leyen）、歐洲央行總裁拉加德（Christine Lagarde）、瑞典環保少女貝里（Greta Thunberg）、華為創辦人任正非。據《路透》報導，伊朗外交部長查里夫（Mohammad Javad Zarif）等伊朗官員已取消原定出席行程，對此，世界經濟論壇主席布倫德（BorgeBrende）週二於記者會上表示，在伊朗地區局勢不明朗的情況下，我們必須理解查里夫的缺席。', '日前黑鷹殉職將士移靈儀式中，有憲兵因左右轉失靈遭致後憲網友非議，甚至有當事官兵壓力過大上網求援。曾擔任憲兵司令的駐丹麥大使李翔宙今日透過昔日幕僚表示，他除了感嘆，有更多不捨與心疼，而沒有人不會犯錯，關鍵在憲兵是否全軍官兵團結凝聚，坦然認錯、勇於改過。他呼籲後憲們能共同支持，讓線上憲兵恢復榮譽與自信。']
+    keyword2=[[['陸委會', '美國智庫戰略暨國際研究中心（CSIS）亞洲事務資深顧問葛來儀'], ['今（15）日'], ['中國', '台灣'], '大陸國台辦今（15）日舉行例行記者會，全場聚焦陸方如何解讀台灣大選的結果，陸委會傍晚表示，台灣從來都不是中華人民共和國的一部分，台灣前途只有台灣2,300萬人民有權決定。'], [['毛澤東', '習近平 '], ['12月26日 偉人節 '], ['中國江西省上饒市'], '毛澤東除了是偉大的領袖，也是神，而習近平新時代中國特色社會主義思想核心，就是要維護毛澤東的權威至高性'], [['券商公會理事長賀鳴珩'], ['今年'], ['台股', '殖利率', '公會'], '台股在金豬年開紅盤後重返萬點，至今未曾再跌破，吸引外資回補的主因之一就是高殖利率。'], [['國民黨立委陳學聖', '韓國瑜'], ['1 17', '1 14'], ['台灣'], '國民黨立委陳學聖突破盲腸說，拿掉黨名「中國」兩字已討論過很多次，民進黨沒在黨名加「台灣」，大家一樣認為是本土政黨；新黨沒加「中國」，卻被大家覺得是統派，證明有沒有冠上這兩個字不重要，重要的是黨的內涵。'], [['國民黨', '前主席吳敦義', '謝金河'], ['選後'], ['高雄'], '謝金河建議，韓國瑜目前應該要顧好高雄，專心在市政上，「若去選黨主席一定會被罷免」。'], [['台北市議員戴錫欽、李明賢、李柏毅、張斯綱', '馬英九'], ['1 15'], ['台灣', '北京'], '馬英九認為，92共識不是不能調整，但是怎麼調整都必須符合中華民國憲法、民意支持，以及北京方面能夠接受做為雙方交流的共識，還有國際能夠理解等四個前提，賦予92共識新意涵。'], [['國民黨', '前主席吳敦義', '謝金河'], ['選後'], ['高雄'], '謝金河建議，韓國瑜目前應該要顧好高雄，專心在市政上，「若去選黨主席一定會被罷免」。'], [['邱顯智', '民眾黨', '國民黨吳斯懷'], ['15日'], ['台灣'], '邱顯智15日再度說明想法，舉出多個不清楚民眾黨立場的例子，要求「與其輕言聯盟，不如就事論事」。'], [['民進黨', '總統蔡英文', '謝震武'], ['2020總統大選'], ['總統', '國會', '民進黨'], '總統蔡英文贏得2020總統大選成功連任，民進黨也獲得61席立委，達到「國會過半」目標。他提醒民進黨「千萬不要囂張」，這也是接下來民進黨要被檢驗的地方。'], [['民進黨秘書長羅文嘉', '陸委會', '中共'], ['今天（12號）下午'], ['台灣'], '民進黨秘書長羅文嘉今天下午強調，這次台灣人民用選票告訴中共和全世界，對未來發展的看法就是「反一國兩制」，並向中國喊話「活在過去並不助於兩岸未來的和平發展」。'], [['伊朗外交部長查瑞夫', '美國總統川普'], ['今天（15號）'], ['伊朗'], '伊朗外交部長查瑞夫今天表示，伊朗與世界強國達成的現行核協議還沒失靈，但若要跟美國總統川普達成新核武協議，他不確定能否持久。'], [['帕梅拉·莫拉'], ['1 15'], ['美國伍德裏奇'], '當年伍德裏奇（Woodridge）的16歲女孩帕梅拉·莫拉（Pamela Maurer）被綁架謀殺，謎團懸宕近半世紀，當初因為辦案技術不足而遲遲無法破案，但現在靠新的DNA鑑識技術，警方終於找到嫌犯，只可惜兇嫌早在1981年就過世。'], [['台經院景氣中心副主任邱達生'], ['今（16）日'], ['美中'], '美中今（16）日簽署第一階段協議。'], [['貝倫堡銀行分析師史密丁'], ['昨天（14號）'], ['德國'], '貝倫堡銀行（Berenberg bank）分析師史密丁（Holger Schmieding）表示，展望未來，德國經濟成長的黃金10年已逐漸接近尾聲。'], [['世界經濟論壇主席布倫德'], ['週二'], ['世界經濟論壇'], '《CNBC》報導顯示，今年出席世界經濟論壇的大人物包括：芬蘭總理馬林（Sanna Marin）、歐盟執委會主席范德萊恩（Ursula von der Leyen）、歐洲央行總裁拉加德（Christine Lagarde）、瑞典環保少女貝里（Greta Thunberg）、華為創辦人任正非。'], [['曾擔任憲兵司令的駐丹麥大使李翔宙'], ['1 16'], ['日前黑鷹殉職將士移靈儀式中'], '日前黑鷹殉職將士移靈儀式中，有憲兵因左右轉失靈遭致後憲網友非議，甚至有當事官兵壓力過大上網求援。']]
+    import re
+    content=event.message.text
+    #global msg #第一部分輸出的list
+    #global msg_flag
+    #global totallink
+    global user_input
+    global totallink
+    global torf
+    global flag#記錄第幾個STR1
+    global fla
+    global flag2#第幾個STR2
+    global torf #是否為單一選項的那個
+    global TF#紀錄是在資料庫裡有的還是需要另外搜尋
+    #totallink =[]
+    #msg_flag=[0,0,0]#初始情況是都沒有被點過
+    
+    if content[0:2] == "熱搜":#觸發條件
+        user_input=content[2:10]
+        user_input=user_input=re.sub(r"\s+","", user_input)
+        if user_input in STR1:
+            TF=1
+            for i in range(0,len(STR1)):
+                if user_input==STR1[i]:
+                    flag=i
+                    line_bot_api.reply_message(
+                        event.reply_token,
+                        TextSendMessage(
+                            text='需要提供推薦的關鍵字ㄇ',
+                            quick_reply=QuickReply(
+                                items=[
+                                    QuickReplyButton(
+                                        action=MessageAction(label="不要 我只要搜尋剛剛那個", text="不要 我只要搜尋剛剛那個")
+                                    ),
+                                    QuickReplyButton(
+                                        action=MessageAction(label="好啊來吧怕你ㄇ", text="好啊來吧怕你ㄇ")
+                                    ),
+                                ]
+                            )
+                        )
+                    )     
+        else:
+            TF=0
+            tStart = time.time()
+            torf=0
+            user_input=content[2:10] #剩餘關鍵字,ex:熱搜 韓國瑜
+            #user_input=re.sub(r"\s+","", user_input)#去除[2:10]之空白格
+            global msg #第一部分輸出的list
+            global msg_flag
+            global onlyme
+            onlyme=[]
+            totallink =[]
+            msg_flag=[0,0,0]#初始情況是都沒有被點過
+            msg=list(first_part(user_input))
+            print("MSG=====================",msg)
+            onlyme.append(msg[-1])
+            print(onlyme[-1])
+            print(type(onlyme[-1]))
+            tEnd = time.time()
+            delta_t=str(round(tEnd-tStart, 2))
+            print('time elapsed: ' + delta_t + ' seconds') #27.715998888015747秒 ㄏㄏ #20.58857011795044
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(
+                    text='需要提供推薦的關鍵字ㄇ',
+                    quick_reply=QuickReply(
+                        items=[
+                            QuickReplyButton(
+                                action=MessageAction(label="不要 我只要搜尋剛剛那個", text="不要 我只要搜尋剛剛那個")
+                            ),
+                            QuickReplyButton(
+                                action=MessageAction(label="好啊來吧怕你ㄇ", text="好啊來吧怕你ㄇ")
+                            ),
+                        ]
+                    )
+                )
+            )     
+    if TF==0:
+        if content =="不要 我只要搜尋剛剛那個":#觸發條件
+            tStart = time.time()
+            torf=1
+            
+            # T=second_part(user_input," ")
+            totallink.append(onlyme[-1]) #ltn_link
+            #udn_link=third_part(user_input,msg_choose) #udn_link
+            #abstract=fourth_part(ltn_link,udn_link) #abstract
+            print(totallink[0])
+            line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(
+                        text='接下來需要花點時間呦',
+                        quick_reply=QuickReply(
+                            items=[
+                                QuickReplyButton(
+                                    action=MessageAction(label="快結束惹 點我集氣一下", text="快結束惹 點我集氣一下")
+                                ),
+                            ]
+                        )
+                    )
+                ) 
+
+            tEnd = time.time()
+            delta_t=str(round(tEnd-tStart, 2))
+            print('===========================here costing: ' + delta_t + ' seconds=====================')    
+        
+        if content == "好啊來吧怕你ㄇ":#觸發條件
+            
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(
+                    text='相關の關鍵字如下:',
+                    quick_reply=QuickReply(
+                        items=[
+                            QuickReplyButton(
+                                action=MessageAction(label="請過目 僅供參考", text="請過目 僅供參考")
+                            ),
+                            QuickReplyButton(
+                                action=MessageAction(label=msg[0], text=msg[0])
+                            ),
+                            QuickReplyButton(
+                                action=MessageAction(label=msg[1], text=msg[1])
+                            ),
+                            QuickReplyButton(
+                                action=MessageAction(label=msg[2], text=msg[2])
+                            ),
+                        ]
+                    )
+                )
+            )               
+        
+        #下面是對應三個關建字按鈕
+        if content == msg[0]:
+            tStart = time.time()
+            
+            msg_flag[0]=1
+
+            tEnd = time.time()
+            delta_t=str(round(tEnd-tStart, 2))
+            T=second_part(user_input,msg[0])
+            totallink.append(T[1]) #ltn_link
+            #udn_link=third_part(user_input,msg_choose) #udn_link
+            #abstract=fourth_part(ltn_link,udn_link) #abstract
+            print(totallink[0])
+            line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(
+                        text='是不是在想我怎麼消失惹',
+                        quick_reply=QuickReply(
+                            items=[
+                                QuickReplyButton(
+                                    action=MessageAction(label="快結束惹 點我集氣一下", text="快結束惹 點我集氣一下")
+                                ),
+                            ]
+                        )
+                    )
+                ) 
+
+            
+            print('===========================here costing: ' + delta_t + ' seconds=====================')
+
+        if content == msg[1]:
+            tStart = time.time()
+
+            msg_flag[1]=1
+
+            tEnd = time.time()
+            delta_t=str(round(tEnd-tStart, 2))
+            T=second_part(user_input,msg[1])
+            totallink.append(T[1])  #ltn_link
+            #udn_link=third_part(user_input,msg_choose) #udn_link
+            #abstract=fourth_part(ltn_link,udn_link) #abstract
+            print(totallink[0])
+            line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(
+                        text='是不是在想我怎麼消失惹',
+                        quick_reply=QuickReply(
+                            items=[
+                                QuickReplyButton(
+                                    action=MessageAction(label="快結束惹 點我集氣一下", text="快結束惹 點我集氣一下")
+                                ),
+                            ]
+                        )
+                    )
+                ) 
+
+            
+            print('===========================here costing: ' + delta_t + ' seconds=====================')
+
+        if content == msg[2]:
+            tStart = time.time()
+            msg_flag[2]=1
+
+            tEnd = time.time()
+            delta_t=str(round(tEnd-tStart, 2))
+            T=second_part(user_input,msg[2])
+            totallink.append(T[1]) #ltn_link
+            #udn_link=third_part(user_input,msg_choose) #udn_link
+            #abstract=fourth_part(ltn_link,udn_link) #abstract
+            print(totallink[0])
+            line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(
+                        text='是不是在想我怎麼消失惹',
+                        quick_reply=QuickReply(
+                            items=[
+                                QuickReplyButton(
+                                    action=MessageAction(label="快結束惹 點我集氣一下", text="快結束惹 點我集氣一下")
+                                ),
+                            ]
+                        )
+                    )
+                ) 
+
+            
+            print('===========================here costing: ' + delta_t + ' seconds=====================')
+
+        if content=="快結束惹 點我集氣一下":
+            print(torf)
+            if torf ==1:
+                print("909090909090909090909099999999")
+                totallink.append(third_part(user_input," ")) #udn_link
+            else:
+                if msg_flag[0]==1:
+                    totallink.append(third_part(user_input,msg[0])) #udn_link
+                if msg_flag[1]==1:
+                    totallink.append(third_part(user_input,msg[1])) #udn_link
+                if msg_flag[2]==1:
+                    totallink.append(third_part(user_input,msg[2])) #udn_link
+                
+            
+            # line_bot_api.reply_message(
+            #     event.reply_token,
+            #     TextSendMessage(text="聯合報udn:\n"+totallink[0]+"\n自由時報ltn:\n"+totallink[1]))
+            buttons_template = TemplateSendMessage(
+                alt_text='功能 template',
+                template=ButtonsTemplate(
+                    title='想幹嘛',
+                    text='想幹嘛',
+                    thumbnail_image_url='https://i.imgur.com/qKkE2bj.jpg',
+                    actions=[
+                        MessageTemplateAction(
+                            label='有相關新聞嗎',
+                            text='有相關新聞嗎'
+                        ),
+                        MessageTemplateAction(
+                            label='我要看摘要',
+                            text='我要看摘要'
+                        ),
+                        MessageTemplateAction(
+                            label='說重點',
+                            text='說重點'
+                        )
+                    ]
+                )
+            )
+            line_bot_api.reply_message(event.reply_token, buttons_template)
+        if content=="有相關新聞嗎":
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="聯合報udn:\n"+totallink[1]+"\n自由時報ltn:\n"+totallink[0]))
+        if content=="說重點":
+            tStart = time.time()
+            p=""
+            t=""
+            l=""
+            temppp=fifth_part(fourth_part(totallink[1],totallink[0]))
+            print(temppp)
+            for i in range(0,len(temppp[0])):
+                p+=temppp[0][i]
+                p+=" "
+            for i in range(0,len(temppp[1])):
+                t+=temppp[1][i]
+                t+=" "
+            for i in range(0,len(temppp[2])):
+                l+=temppp[2][i]
+                l+=" "
+            tEnd = time.time()
+            delta_t=str(round(tEnd-tStart, 2))
+            
+            if not temppp[1]:
+                line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(text="WHO：："+p+"\n"+"\n"+"WHERE："+l+"\n"+"\n"+"WHAT："+temppp[-1]))
+            else:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="WHO："+p+"\n"+"\n"+"WHEN："+t+"\n"+"\n"+"WHERE："+l+"\n"+"\n"+"WHAT："+temppp[-1]))
+            print('=============================here costing: ' + delta_t + ' seconds====================')
+            #TextSendMessage(text="人 : "+temppp[0][0]+"\n"+"事 : "+temppp[3][0]+"\n"+"時 : "+temppp[1][0]+"\n"+"地 : "+temppp[2][0]+"\n")
+        if content == "我要看摘要":
+            tStart = time.time()
+            #msg_choose=msg[0]
+            abstract=fourth_part(totallink[1],totallink[0]) #abstract
+            line_bot_api.reply_message(
+            event.reply_token,
+            TextSendMessage(text="摘要:\n"+abstract))
+            tEnd = time.time()
+            delta_t=str(round(tEnd-tStart, 2))
+            print('=============================here costing: ' + delta_t + ' seconds====================')
+    if TF==1:
+        if content =="不要 我只要搜尋剛剛那個":#=====================這邊還沒跑資料庫=========================          
+            torf=1
+            line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(
+                        text='接下來需要花點時間呦',
+                        quick_reply=QuickReply(
+                            items=[
+                                QuickReplyButton(
+                                    action=MessageAction(label="快結束惹 點我集氣一下", text="快結束惹 點我集氣一下")
+                                ),
+                            ]
+                        )
+                    )
+                )   
+        
+        if content == "好啊來吧怕你ㄇ":#先處理這邊
+            torf=0
+            line_bot_api.reply_message(
+                event.reply_token,
+                TextSendMessage(
+                    text='相關の關鍵字如下:',
+                    quick_reply=QuickReply(
+                        items=[
+                            QuickReplyButton(
+                                action=MessageAction(label="請過目 僅供參考", text="請過目 僅供參考")
+                            ),
+                            QuickReplyButton(
+                                action=MessageAction(label=STR2[flag][0], text=STR2[flag][0])
+                            ),
+                            QuickReplyButton(
+                                action=MessageAction(label=STR2[flag][1], text=STR2[flag][1])
+                            ),
+                            QuickReplyButton(
+                                action=MessageAction(label=STR2[flag][2], text=STR2[flag][2])
+                            ),
+                        ]
+                    )
+                )
+            )               
+        if content==STR2[flag][0]:
+            flag2=0
+            time.sleep(2)
+            line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(
+                        text='是不是在想我怎麼消失惹',
+                        quick_reply=QuickReply(
+                            items=[
+                                QuickReplyButton(
+                                    action=MessageAction(label="快結束惹 點我集氣一下", text="快結束惹 點我集氣一下")
+                                ),
+                            ]
+                        )
+                    )
+                ) 
+        if content==STR2[flag][1]:
+            flag2=1
+            time.sleep(2)
+            line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(
+                        text='是不是在想我怎麼消失惹',
+                        quick_reply=QuickReply(
+                            items=[
+                                QuickReplyButton(
+                                    action=MessageAction(label="快結束惹 點我集氣一下", text="快結束惹 點我集氣一下")
+                                ),
+                            ]
+                        )
+                    )
+                ) 
+        if content==STR2[flag][2]:
+            flag2=2
+            time.sleep(2)
+            line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(
+                        text='是不是在想我怎麼消失惹',
+                        quick_reply=QuickReply(
+                            items=[
+                                QuickReplyButton(
+                                    action=MessageAction(label="快結束惹 點我集氣一下", text="快結束惹 點我集氣一下")
+                                ),
+                            ]
+                        )
+                    )
+                ) 
+        if content=="快結束惹 點我集氣一下":
+                time.sleep(2)
+                buttons_template = TemplateSendMessage(
+                    alt_text='功能 template',
+                    template=ButtonsTemplate(
+                        title='想幹嘛',
+                        text='想幹嘛',
+                        thumbnail_image_url='https://i.imgur.com/qKkE2bj.jpg',
+                        actions=[
+                            MessageTemplateAction(
+                                label='有相關新聞嗎',
+                                text='有相關新聞嗎'
+                            ),
+                            MessageTemplateAction(
+                                label='我要看摘要',
+                                text='我要看摘要'
+                            ),
+                            MessageTemplateAction(
+                                label='說重點',
+                                text='說重點'
+                            )
+                        ]
+                    )
+                )
+                line_bot_api.reply_message(event.reply_token, buttons_template)
+        if content=="有相關新聞嗎":
+            if torf !=1:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=link[flag][flag2]))
+            else:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text=link2[flag]))
+        if content=="說重點":
+            if torf !=1:
+                p=""
+                t=""
+                l=""
+                e=""
+                for temp in keyword[flag][flag2][0]:
+                    p+=temp
+                    p+=" "
+                for temp in keyword[flag][flag2][1]:
+                    t+=temp
+                    t+=" "
+                for temp in keyword[flag][flag2][2]:
+                    l+=temp
+                    l+=" "
+                for temp in keyword[flag][flag2][3]:
+                    e+=temp
+                    e+=" "
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="人："+p+"\n\n時："+t+"\n\n地："+l+"\n\n事："+e))
+            else:
+                p=""
+                t=""
+                l=""
+                e=""
+                for temp in keyword2[flag][0]:
+                    p+=temp
+                    p+=" "
+                for temp in keyword2[flag][1]:
+                    t+=temp
+                    t+=" "
+                for temp in keyword2[flag][2]:
+                    l+=temp
+                    l+=" "
+                for temp in keyword2[flag][3]:
+                    e+=temp
+                    e+=" "
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="人："+p+"\n\n時："+t+"\n\n地："+l+"\n\n事："+e))
+        if content == "我要看摘要":
+            if torf !=1:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="摘要:\n"+summary[flag][flag2]))
+            else:
+                line_bot_api.reply_message(
+                    event.reply_token,
+                    TextSendMessage(text="摘要:\n"+summary2[flag]))
+    else:
+        if content !="使用說明" and content !="找Ｃ0" and content!="問題回饋":
+            line_bot_api.reply_message(event.reply_token, TextSendMessage(text='🙂🙃'+'說點有意義的話好嗎'+'🙃🙂'))
+####################### 執行 Flask ######################
+if __name__ == "__main__":
+    app.run(debug=True)
